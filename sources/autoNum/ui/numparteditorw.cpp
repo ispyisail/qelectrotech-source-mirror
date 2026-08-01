@@ -315,7 +315,11 @@ void NumPartEditorW::on_modulus_spinBox_valueChanged(int) {
 void NumPartEditorW::setType(NumPartEditorW::type t, bool fnum) {
 	setCurrentIndex(t);
 
-	//if @t is a numeric type and preview type @type_ isn't a numeric type
+	//if @t is a numeric type and it's actually changing (including between
+	//two numeric types, e.g. unit -> wrap: each numeric type has its own
+	//sensible defaults -- unit's "increase" default doesn't mean anything
+	//for wrap's own increase/modulus, so switching must reset them rather
+	//than silently carrying over a stale value from the previous type)
 	//or @fnum is true, we set numeric behavior
 	if (
 			(
@@ -327,14 +331,7 @@ void NumPartEditorW::setType(NumPartEditorW::type t, bool fnum) {
 				 || t==hundredfolio
 				 || t==wrap
 				 )
-				&& (type_==string
-				    || type_==folio
-				    || type_==plant
-				    || type_==locmach
-				    || type_==idfolio
-				    || type_==elementcolumn
-				    || type_==elementline
-				    || type_==elementprefix)
+				&& t != type_
 			)
 			|| fnum
 	)
