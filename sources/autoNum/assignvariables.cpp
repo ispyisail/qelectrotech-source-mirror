@@ -44,6 +44,7 @@ namespace autonum
 		ten_folio     = other.ten_folio;
 		hundred       = other.hundred;
 		hundred_folio = other.hundred_folio;
+		wrap          = other.wrap;
 	}
 
 	sequentialNumbers::~sequentialNumbers()
@@ -61,6 +62,7 @@ namespace autonum
 		ten_folio     = other.ten_folio;
 		hundred       = other.hundred;
 		hundred_folio = other.hundred_folio;
+		wrap          = other.wrap;
 
 		return (*this);
 	}
@@ -72,7 +74,8 @@ namespace autonum
 			ten           == other.ten && \
 			ten_folio     == other.ten_folio && \
 			hundred       == other.hundred && \
-			hundred_folio == other.hundred_folio)
+			hundred_folio == other.hundred_folio && \
+			wrap          == other.wrap)
 			return true;
 		else
 			return false;
@@ -129,6 +132,11 @@ namespace autonum
 						    document,
 						    "hundredFolio",
 						    hundred_folio.join(";")));
+		if(!wrap.isEmpty())
+			element.appendChild(QETXML::textToDomElement(
+						    document,
+						    "wrap",
+						    wrap.join(";")));
 
 		return element;
 	}
@@ -162,8 +170,11 @@ namespace autonum
 
 		from = element.firstChildElement("hundredFolio");
 		hundred_folio = from.text().split(";");
+
+		from = element.firstChildElement("wrap");
+		wrap = from.text().split(";");
 	}
-	
+
 		//Clear this sequence
 	void sequentialNumbers::clear()
 	{
@@ -173,6 +184,7 @@ namespace autonum
 		ten_folio.clear();
 		hundred.clear();
 		hundred_folio.clear();
+		wrap.clear();
 	}
 
 	/**
@@ -410,18 +422,23 @@ namespace autonum
 	{
 		int max = qMax(
 						qMax(
-							qMax(m_seq_struct.unit_folio.size(),
-								 m_seq_struct.ten_folio.size()),
-							qMax(m_seq_struct.hundred_folio.size(),
-								 m_seq_struct.unit.size())),
-						qMax(m_seq_struct.hundred.size(),
-							 m_seq_struct.ten.size())
+							qMax(
+								qMax(m_seq_struct.unit_folio.size(),
+									 m_seq_struct.ten_folio.size()),
+								qMax(m_seq_struct.hundred_folio.size(),
+									 m_seq_struct.unit.size())),
+							qMax(m_seq_struct.hundred.size(),
+								 m_seq_struct.ten.size())),
+						m_seq_struct.wrap.size()
 					);
 
 		for (int i=1; i<=max ; i++)
 		{
 			if (m_assigned_label.contains("%sequ_" + QString::number(i)) && m_seq_struct.unit.size() >= i) {
 				m_assigned_label.replace("%sequ_" + QString::number(i),m_seq_struct.unit.at(i-1));
+			}
+			if (m_assigned_label.contains("%seqw_" + QString::number(i)) && m_seq_struct.wrap.size() >= i) {
+				m_assigned_label.replace("%seqw_" + QString::number(i),m_seq_struct.wrap.at(i-1));
 			}
 			if (m_assigned_label.contains("%seqt_" + QString::number(i)) && m_seq_struct.ten.size() >= i) {
 				m_assigned_label.replace("%seqt_" + QString::number(i),m_seq_struct.ten.at(i-1));
@@ -551,6 +568,10 @@ namespace autonum
 				autonum::setSequentialToList(seqStruct.hundred_folio, context,"hundredfolio");
 				autonum::setFolioSequentialToHash(seqStruct.hundred_folio, diagram->m_elmt_hundredfolio_max, hashKey);
 			}
+			if (label.contains("%seqw_"))
+			{
+				autonum::setSequentialToList(seqStruct.wrap, context,"wrap");
+			}
 		}
 	}
 
@@ -570,6 +591,7 @@ namespace autonum
 		int count_tenf = 0;
 		int count_hundred = 0;
 		int count_hundredf = 0;
+		int count_wrap = 0;
 
 		for(int i=0 ; i<nc.size() ; i++)
 		{
@@ -625,6 +647,10 @@ namespace autonum
 			else if (type == "hundredfolio") {
 				count_hundredf++;
 				formula.append("%seqhf_" + QString::number(count_hundredf));
+			}
+			else if (type == "wrap") {
+				count_wrap++;
+				formula.append("%seqw_" + QString::number(count_wrap));
 			}
 		}
 

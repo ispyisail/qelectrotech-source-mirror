@@ -55,7 +55,7 @@ NumerotationContext NumerotationContextCommands::next()
 		if (str.at(0) == "wrap" && str.size() > 4) {
 			int modulus = str.at(4).toInt();
 			if (modulus > 0 && (str.at(1).toInt() + str.at(2).toInt()) >= modulus)
-				carry(contextnum, i - 1);
+				carry(contextnum, context_, i - 1);
 		}
 	}
 	return contextnum;
@@ -77,7 +77,7 @@ NumerotationContext NumerotationContextCommands::previous()
 		if (str.at(0) == "wrap" && str.size() > 4) {
 			int modulus = str.at(4).toInt();
 			if (modulus > 0 && (str.at(1).toInt() - str.at(2).toInt()) < 0)
-				borrow(contextnum, i - 1);
+				borrow(contextnum, context_, i - 1);
 		}
 	}
 	return contextnum;
@@ -92,14 +92,23 @@ NumerotationContext NumerotationContextCommands::previous()
 	cascades further back -- so wrap parts can be chained (e.g. seconds
 	wrapping into minutes wrapping into hours).
 	@param contextnum the context being built by next(); already contains
-	entries for every index <= from_index
+	entries for every index <= from_index, computed by each part's own
+	strategy (i.e. already advanced by its own increase)
+	@param original the pre-advance context (context_): carry reads the
+	target part's OLD value from here, not its already-advanced entry in
+	contextnum, and *replaces* that entry with old+1. This part's own
+	increase is the right amount for an ordinary step, but on a step
+	where it's also the carry target, the carry (exactly one unit, by
+	definition) must be the sole source of its change -- otherwise a
+	non-zero increase on a wrap-adjacent part would double-count on every
+	wrap-around (its own advance, plus the carry on top of it).
 	@param from_index index to start looking from, going backwards
 */
-void NumerotationContextCommands::carry(NumerotationContext &contextnum, int from_index)
+void NumerotationContextCommands::carry(NumerotationContext &contextnum, const NumerotationContext &original, int from_index)
 {
 	for (int j = from_index; j >= 0; --j) {
-		QStringList strl = contextnum.itemAt(j);
-		if (!contextnum.keyIsNumber(strl.at(0)))
+		QStringList strl = original.itemAt(j);
+		if (!original.keyIsNumber(strl.at(0)))
 			continue;
 
 		int value = strl.at(1).toInt() + 1;
@@ -107,7 +116,7 @@ void NumerotationContextCommands::carry(NumerotationContext &contextnum, int fro
 			int modulus = strl.at(4).toInt();
 			if (modulus > 0 && value >= modulus) {
 				contextnum.replaceValue(j, QString::number(value - modulus));
-				carry(contextnum, j - 1);
+				carry(contextnum, original, j - 1);
 				return;
 			}
 		}
@@ -124,13 +133,14 @@ void NumerotationContextCommands::carry(NumerotationContext &contextnum, int fro
 	Inverse of carry(): subtract one unit from the nearest numeric part at
 	or before from_index. If that part is itself a wrap part and this
 	takes it below 0, it wraps to (modulus - 1) and the borrow cascades
-	further back.
+	further back. See carry()'s @original parameter for why the target's
+	OLD value (not its already-advanced entry) is used.
 */
-void NumerotationContextCommands::borrow(NumerotationContext &contextnum, int from_index)
+void NumerotationContextCommands::borrow(NumerotationContext &contextnum, const NumerotationContext &original, int from_index)
 {
 	for (int j = from_index; j >= 0; --j) {
-		QStringList strl = contextnum.itemAt(j);
-		if (!contextnum.keyIsNumber(strl.at(0)))
+		QStringList strl = original.itemAt(j);
+		if (!original.keyIsNumber(strl.at(0)))
 			continue;
 
 		int value = strl.at(1).toInt() - 1;
@@ -138,7 +148,7 @@ void NumerotationContextCommands::borrow(NumerotationContext &contextnum, int fr
 			int modulus = strl.at(4).toInt();
 			if (modulus > 0 && value < 0) {
 				contextnum.replaceValue(j, QString::number(value + modulus));
-				borrow(contextnum, j - 1);
+				borrow(contextnum, original, j - 1);
 				return;
 			}
 		}
