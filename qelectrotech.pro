@@ -175,7 +175,8 @@ HEADERS += $$files(sources/*.h) \
            $$files(sources/import/edz/*.h) \
            $$files(sources/import/edz/lzma/*.h) \
            $$files(sources/logging/*.h) \
-           $$files(sources/logging/ui/*.h)
+           $$files(sources/logging/ui/*.h) \
+           $$files(sources/custom/wirecatalogue/*.h)
 
 SOURCES += $$files(sources/*.cpp) \
            $$files(sources/editor/*.cpp) \
@@ -223,11 +224,13 @@ SOURCES += $$files(sources/*.cpp) \
            $$files(sources/import/edz/*.cpp) \
            $$files(sources/import/edz/lzma/*.c) \
            $$files(sources/logging/*.cpp) \
-           $$files(sources/logging/ui/*.cpp)
+           $$files(sources/logging/ui/*.cpp) \
+           $$files(sources/custom/wirecatalogue/*.cpp)
 
 
 # Needed for use promote QTreeWidget in terminalstripeditor.ui
 INCLUDEPATH += sources/TerminalStrip/ui
+INCLUDEPATH += sources/custom/wirecatalogue
 
 # Needed for the EPLAN .edz importer (PR #513) and its bundled lzma/7z sources
 INCLUDEPATH += sources/import/edz
