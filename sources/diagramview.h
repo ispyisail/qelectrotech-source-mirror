@@ -73,6 +73,9 @@ class DiagramView : public QGraphicsView
 		void setEventInterface (DVEventInterface *event_interface);
 		QList<QAction *> contextMenuActions() const;
 	
+		bool startElementPlacement(const ElementsLocation &location,
+					   const QPointF &scene_pos);
+		QPointF defaultPlacementPos() const;
 	protected:
 		void mouseDoubleClickEvent(QMouseEvent *) override;
 		void contextMenuEvent(QContextMenuEvent *) override;
@@ -94,7 +97,6 @@ class DiagramView : public QGraphicsView
 		virtual bool switchToSelectionModeIfNeeded(QInputEvent *e);
 		virtual bool isCtrlShifting(QInputEvent *);
 		virtual bool selectedItemHasFocus();
-	
 	private:
 		void handleElementDrop(QDropEvent *);
 		void handleTitleBlockDrop(QDropEvent *);
