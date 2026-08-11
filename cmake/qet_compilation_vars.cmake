@@ -167,6 +167,8 @@ set(QET_SRC_FILES
   ${QET_DIR}/sources/wiringlistexport.cpp
   ${QET_DIR}/sources/conductorcolorrule.cpp
   ${QET_DIR}/sources/conductorcolorrule.h
+  ${QET_DIR}/sources/ui/wiringlistdialog.h
+  ${QET_DIR}/sources/ui/wiringlistdialog.cpp
   ${QET_DIR}/sources/conductornumexport.h
   ${QET_DIR}/sources/conductorprofile.cpp
   ${QET_DIR}/sources/conductorprofile.h
