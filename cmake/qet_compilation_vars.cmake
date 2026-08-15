@@ -177,6 +177,8 @@ set(QET_SRC_FILES
   ${QET_DIR}/sources/configdialog.h
   ${QET_DIR}/sources/createdxf.cpp
   ${QET_DIR}/sources/createdxf.h
+  ${QET_DIR}/sources/dxfpaintdevice.cpp
+  ${QET_DIR}/sources/dxfpaintdevice.h
   ${QET_DIR}/sources/diagramcommands.cpp
   ${QET_DIR}/sources/diagramcommands.h
   ${QET_DIR}/sources/diagramcontent.cpp
@@ -215,6 +217,8 @@ set(QET_SRC_FILES
   ${QET_DIR}/sources/exportpropertieswidget.h
   ${QET_DIR}/sources/genericpanel.cpp
   ${QET_DIR}/sources/genericpanel.h
+  ${QET_DIR}/sources/lastusedstyle.cpp
+  ${QET_DIR}/sources/lastusedstyle.h
   ${QET_DIR}/sources/machine_info.cpp
   ${QET_DIR}/sources/machine_info.h
   ${QET_DIR}/sources/main.cpp
@@ -295,6 +299,9 @@ set(QET_SRC_FILES
   ${QET_DIR}/sources/dataBase/ui/elementquerywidget.h
   ${QET_DIR}/sources/dataBase/ui/summaryquerywidget.cpp
   ${QET_DIR}/sources/dataBase/ui/summaryquerywidget.h
+
+  ${QET_DIR}/sources/autobreakconductor.cpp
+  ${QET_DIR}/sources/autobreakconductor.h
 
   ${QET_DIR}/sources/diagramevent/diagrameventaddelement.cpp
   ${QET_DIR}/sources/diagramevent/diagrameventaddelement.h
@@ -540,7 +547,6 @@ set(QET_SRC_FILES
 
   ${QET_DIR}/sources/richtext/richtexteditor.cpp
   ${QET_DIR}/sources/richtext/richtexteditor_p.h
-  ${QET_DIR}/sources/richtext/ui_addlinkdialog.h
 
   ${QET_DIR}/sources/SearchAndReplace/searchandreplaceworker.cpp
   ${QET_DIR}/sources/SearchAndReplace/searchandreplaceworker.h
@@ -693,6 +699,8 @@ set(QET_SRC_FILES
   ${QET_DIR}/sources/ui/dynamicelementtextitemeditor.h
   ${QET_DIR}/sources/ui/dynamicelementtextmodel.cpp
   ${QET_DIR}/sources/ui/dynamicelementtextmodel.h
+  ${QET_DIR}/sources/ui/customelementinfopartwidget.cpp
+  ${QET_DIR}/sources/ui/customelementinfopartwidget.h
   ${QET_DIR}/sources/ui/elementinfopartwidget.cpp
   ${QET_DIR}/sources/ui/elementinfopartwidget.h
   ${QET_DIR}/sources/ui/elementinfowidget.cpp
@@ -795,7 +803,7 @@ set(QET_SRC_FILES
   ${QET_DIR}/sources/xml/terminalstriplayoutpatternxml.h
   )
 
-if(NOT BUILD_WITH_KF5)
+if(NOT BUILD_WITH_KF)
   list(APPEND QET_SRC_FILES
     ${QET_DIR}/sources/ui/nokde/kautosavefile.cpp
     ${QET_DIR}/sources/ui/nokde/kautosavefile.h
