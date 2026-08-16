@@ -77,7 +77,9 @@ namespace CLIExport {
 		      operations to a diagram's selection state (the first diagram
 		      by default -- see set_diagram below to target another one),
 		      in the same code path the GUI uses (DeleteQGraphicsItemCommand,
-		      RotateSelectionCommand, QUndoStack::undo/redo), then saves.
+		      RotateSelectionCommand, MoveGraphicsItemCommand,
+		      RotateTextsCommand, ChangeElementInformationCommand,
+		      QUndoStack::undo/redo), then saves.
 		      Ops (each a JSON object with an "op" key):
 		        {"op": "set_diagram", "index": 0}
 		            Switches which diagram subsequent ops target, addressed
@@ -151,6 +153,8 @@ namespace CLIExport {
 		            and a single-element move still triggers the project's
 		            auto-conductor connection when enabled. Both keys are
 		            required.
+		        {"op": "select_all"}
+		            Selects every item in the current diagram.
 		        {"op": "delete"}
 		            Deletes the current selection (same command the GUI's
 		            "Delete" action pushes).
@@ -161,8 +165,21 @@ namespace CLIExport {
 		            here yet -- it needs PR #660, not merged as of this
 		            writing; an "as_group" key is rejected rather than
 		            silently ignored.
+		        {"op": "move", "dx": 0, "dy": 0}
+		            Translates the current selection by (dx, dy).
+		        {"op": "diagram", "index": 0}
+		            Switches the target diagram for every subsequent op
+		            (0-based; an out-of-range index is an error).
+		        {"op": "set_property", "uuid": "{...}", "key": "...", "value": "..."}
+		            Sets one element-information key on the element with
+		            the given uuid (DiagramContext keys: "label",
+		            "designation", "manufacturer", ...).
+		        {"op": "rotate_texts", "angle": 90}
+		            Rotates every conductor text in the current diagram
+		            (conductor texts are selected first, since
+		            RotateTextsCommand only acts on the selection).
 		        {"op": "undo"} / {"op": "redo"}
-		            One step on the diagram's QUndoStack.
+		            One step on the current diagram's QUndoStack.
 		      On completion, prints a one-line JSON summary to stdout:
 		      {"ops_applied": N, "element_count": N, "element_info_count": N}
 		      -- the last two are row counts from the in-memory project
