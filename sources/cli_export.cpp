@@ -26,12 +26,16 @@
 #include "diagramcontext.h"
 #include "pdf_links.h"
 #include "qetgraphicsitem/conductor.h"
+#include "qetgraphicsitem/conductortextitem.h"
 #include "qetgraphicsitem/element.h"
 #include "qetgraphicsitem/terminal.h"
 #include "qetproject.h"
 #include "titleblockproperties.h"
+#include "undocommand/changeelementinformationcommand.h"
 #include "undocommand/deleteqgraphicsitemcommand.h"
+#include "undocommand/movegraphicsitemcommand.h"
 #include "undocommand/rotateselectioncommand.h"
+#include "undocommand/rotatetextscommand.h"
 #include "wiringlistexport.h"
 
 // Private Qt PDF engine for drawHyperlink() — see pdf_links / projectprintwindow.
@@ -696,6 +700,94 @@ void applySelect(Diagram *diagram, const QJsonArray &uuids)
 	}
 }
 
+/// Reject any op argument we did not ask for, so a typo or an unsupported
+/// argument fails loudly instead of being silently ignored (the same contract
+/// as the "as_group" rejection in the rotate op).
+/// @return true if an unsupported key was found (and an error printed).
+bool rejectUnsupportedArgs(const QJsonObject &op, const QString &kind,
+						   const QStringList &supported)
+{
+	for (auto it = op.begin(); it != op.end(); ++it) {
+		const QString key = it.key();
+		if (key == "op" || supported.contains(key))
+			continue;
+		err << "test-ops: " << kind << " -- unsupported argument \""
+			<< key << "\".\n";
+		return true;
+	}
+	return false;
+}
+
+/// Read a numeric op argument into @p out. @return false (and print an error)
+/// if the key is present but not a number; true if absent (leaving @p out
+/// untouched, so callers can default it) or a valid number.
+bool opNumber(const QJsonObject &op, const QString &key, qreal *out)
+{
+	if (!op.contains(key))
+		return true;
+	const QJsonValue value = op.value(key);
+	if (value.isDouble()) {
+		*out = value.toDouble();
+		return true;
+	}
+	err << "test-ops: \"" << key << "\" must be a number.\n";
+	return false;
+}
+
+/// Move the diagram's current selection by @p movement, mirroring the GUI drag:
+/// apply the translation first, then push MoveGraphicsItemCommand so undo/redo
+/// stay consistent. The command's first redo() is deliberately a no-op that
+/// only records the animation -- it assumes the caller already moved the items
+/// (the GUI mouse handler does the same), so without the explicit move here the
+/// op would silently do nothing.
+void applyMove(Diagram *diagram, const QPointF &movement)
+{
+	DiagramContent content(diagram);
+	content.removeNonMovableItems();
+
+	const auto movable = content.items(DiagramContent::Elements
+									   | DiagramContent::TextFields
+									   | DiagramContent::Images
+									   | DiagramContent::Shapes
+									   | DiagramContent::TextGroup
+									   | DiagramContent::ElementTextFields
+									   | DiagramContent::Tables
+									   | DiagramContent::TerminalStrip);
+	const auto all_items = content.items();
+	for (QGraphicsItem *qgi : movable) {
+		// An item whose parent is itself selected moves with its parent;
+		// moving it again would double-count.
+		if (const QGraphicsItem *parent = qgi->parentItem()) {
+			if (all_items.contains(const_cast<QGraphicsItem *>(parent)))
+				continue;
+		}
+		qgi->setPos(qgi->pos() + movement);
+	}
+
+	for (Conductor *conductor : content.m_conductors_to_move) {
+		conductor->updatePath();
+		if (conductor->textItem()->wasMovedByUser())
+			conductor->textItem()->setPos(conductor->textItem()->pos() + movement);
+	}
+	for (Conductor *conductor : content.m_conductors_to_update)
+		conductor->updatePath();
+
+	diagram->undoStack().push(new MoveGraphicsItemCommand(diagram, content, movement));
+}
+
+/// Rotate every conductor text in @p diagram by @p angle. RotateTextsCommand
+/// only touches *selected* texts, so select them all first -- a bare
+/// {"op":"rotate_texts"} with no prior select op must still rotate the whole
+/// folio's conductor labels.
+void applyRotateTexts(Diagram *diagram, qreal angle)
+{
+	for (Conductor *conductor : diagram->conductors()) {
+		if (ConductorTextItem *text = conductor->textItem())
+			text->setSelected(true);
+	}
+	diagram->undoStack().push(new RotateTextsCommand(diagram, angle));
+}
+
 /// Headless, scripted editing for automated regression testing. See
 /// cli_export.h for the op vocabulary and the JSON summary this prints.
 int applyTestOps(QETProject &project, const QString &opsPath, const QString &output)
@@ -761,6 +853,74 @@ int applyTestOps(QETProject &project, const QString &opsPath, const QString &out
 				err << "test-ops: rotate -- nothing selected, no-op.\n";
 				delete c;
 			}
+		}
+		else if (kind == "select_all") {
+			if (rejectUnsupportedArgs(op, "select_all", {}))
+				return 2;
+			diagram->selectAll();
+		}
+		else if (kind == "move") {
+			if (rejectUnsupportedArgs(op, "move", {"dx", "dy"}))
+				return 2;
+			qreal dx = 0.0, dy = 0.0;
+			if (!opNumber(op, "dx", &dx) || !opNumber(op, "dy", &dy))
+				return 2;
+			applyMove(diagram, QPointF(dx, dy));
+		}
+		else if (kind == "diagram") {
+			if (rejectUnsupportedArgs(op, "diagram", {"index"}))
+				return 2;
+			const double index_value = op.value("index").toDouble();
+			if (!op.contains("index") || !op.value("index").isDouble()
+				|| index_value != int(index_value)) {
+				err << "test-ops: diagram -- \"index\" is required and must be an integer.\n";
+				return 2;
+			}
+			const int idx = int(index_value);
+			if (idx < 0 || idx >= project.diagrams().size()) {
+				err << "test-ops: diagram -- index " << idx << " out of range (project has "
+					<< project.diagrams().size() << " diagram(s)).\n";
+				return 2;
+			}
+			diagram = project.diagrams().at(idx);
+		}
+		else if (kind == "set_property") {
+			if (rejectUnsupportedArgs(op, "set_property", {"uuid", "key", "value"}))
+				return 2;
+			const QString uuid = op.value("uuid").toString();
+			const QString key = op.value("key").toString();
+			const QString value = op.value("value").toString();
+			if (uuid.isEmpty() || key.isEmpty()) {
+				err << "test-ops: set_property -- \"uuid\" and \"key\" are required.\n";
+				return 2;
+			}
+			Element *target = nullptr;
+			for (Element *e : diagram->elements()) {
+				if (e->uuid() == QUuid(uuid)) {
+					target = e;
+					break;
+				}
+			}
+			if (!target) {
+				err << "test-ops: set_property -- uuid not found in diagram: " << uuid << "\n";
+				return 2;
+			}
+			DiagramContext old_info = target->elementInformations();
+			DiagramContext new_info = old_info;
+			if (!new_info.addValue(key, value)) {
+				err << "test-ops: set_property -- key \"" << key << "\" is not acceptable.\n";
+				return 2;
+			}
+			diagram->undoStack().push(
+				new ChangeElementInformationCommand(target, old_info, new_info));
+		}
+		else if (kind == "rotate_texts") {
+			if (rejectUnsupportedArgs(op, "rotate_texts", {"angle"}))
+				return 2;
+			qreal angle = 90.0;
+			if (!opNumber(op, "angle", &angle))
+				return 2;
+			applyRotateTexts(diagram, angle);
 		}
 		else if (kind == "undo") {
 			diagram->undoStack().undo();

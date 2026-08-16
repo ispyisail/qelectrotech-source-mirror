@@ -74,14 +74,19 @@ namespace CLIExport {
 		      field.  E.g. --set-titleblock in.qet out.qet revision=B date=today
 		test-ops: headless, scripted editing for automated regression
 		      testing (not an end-user feature). Applies a JSON array of
-		      operations to the FIRST diagram's selection state, in the
-		      same code path the GUI uses (DeleteQGraphicsItemCommand,
-		      RotateSelectionCommand, QUndoStack::undo/redo), then saves.
+		      operations to a diagram's selection state, in the same code
+		      path the GUI uses (DeleteQGraphicsItemCommand,
+		      RotateSelectionCommand, MoveGraphicsItemCommand,
+		      RotateTextsCommand, ChangeElementInformationCommand,
+		      QUndoStack::undo/redo), then saves. Ops run against the
+		      first diagram unless a "diagram" op switches the target.
 		      Ops (each a JSON object with an "op" key):
 		        {"op": "select", "uuids": ["{...}", ...]}
 		            Clears the diagram's selection, then selects every
 		            element whose uuid is listed. Unknown uuids are
 		            reported on stderr and otherwise ignored.
+		        {"op": "select_all"}
+		            Selects every item in the current diagram.
 		        {"op": "delete"}
 		            Deletes the current selection (same command the GUI's
 		            "Delete" action pushes).
@@ -92,8 +97,21 @@ namespace CLIExport {
 		            here yet -- it needs PR #660, not merged as of this
 		            writing; an "as_group" key is rejected rather than
 		            silently ignored.
+		        {"op": "move", "dx": 0, "dy": 0}
+		            Translates the current selection by (dx, dy).
+		        {"op": "diagram", "index": 0}
+		            Switches the target diagram for every subsequent op
+		            (0-based; an out-of-range index is an error).
+		        {"op": "set_property", "uuid": "{...}", "key": "...", "value": "..."}
+		            Sets one element-information key on the element with
+		            the given uuid (DiagramContext keys: "label",
+		            "designation", "manufacturer", ...).
+		        {"op": "rotate_texts", "angle": 90}
+		            Rotates every conductor text in the current diagram
+		            (conductor texts are selected first, since
+		            RotateTextsCommand only acts on the selection).
 		        {"op": "undo"} / {"op": "redo"}
-		            One step on the diagram's QUndoStack.
+		            One step on the current diagram's QUndoStack.
 		      On completion, prints a one-line JSON summary to stdout:
 		      {"ops_applied": N, "element_count": N, "element_info_count": N}
 		      -- the last two are row counts from the in-memory project
