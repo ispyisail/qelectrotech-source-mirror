@@ -74,6 +74,7 @@ const QHash<QString, QString> &exportFlags()
 		{"--export-links", "links"},
 		{"--info", "info"},
 		{"--check-elements", "check"},
+		{"--check-links", "checklinks"},
 		{"--resave", "resave"},
 		{"--set-titleblock", "settb"},
 	};
@@ -601,6 +602,84 @@ int exportNets(QETProject &project, const QString &output)
 
 /// Cross-references: each linkable element (coil / contact / report) and the
 /// elements it links to, flagging masters/slaves with no link as unresolved.
+/**
+	@brief checkLinks
+	Report folio-reference links whose direction disagrees with the CURRENT
+	folio order: a "previous folio" arrow whose partner sits on a later folio,
+	or a "next folio" arrow whose partner sits on an earlier one.
+
+	This is a diagnostic, not a validation. Link correctness is not a property
+	of the link alone -- it depends on folio order, which the user changes after
+	linking. Moving a single folio in examples/affuteuse_250h.qet turns its two
+	inverted links correct without touching any link, so refusing such a link at
+	creation time would both fail to prevent the state and block legitimate work
+	(linking before the folios are arranged).
+
+	Deliberately NOT reported:
+	  - same-folio links. They are a real pattern: examples/m_000.qet uses 13
+	    vertical pairs on folios 4 and 5, where a wire leaves the bottom of a
+	    page and re-enters at the top of the same page.
+	  - arrow placement. The "next on the right, previous on the left"
+	    convention holds by median but is bimodal; 61 next arrows in the corpus
+	    sit legitimately on the left half.
+
+	@param project
+	@return 0 when no inverted link is found, 1 when at least one is
+*/
+int checkLinks(QETProject &project)
+{
+	const QHash<Element *, int> folio = folioIndex(project);
+	QTextStream out(stdout);
+
+	int checked = 0, inverted = 0, same_folio = 0, unlinked = 0;
+
+	const QList<Diagram *> diagrams = project.diagrams();
+	for (Diagram *diagram : diagrams) {
+		const QList<Element *> elements = diagram->elements();
+		for (Element *e : elements) {
+			const int lt = e->linkType();
+			if (lt != Element::NextReport && lt != Element::PreviousReport)
+				continue;
+			++checked;
+
+			const QList<Element *> linked = e->linkedElements();
+			if (linked.isEmpty()) {
+				++unlinked;
+				continue;
+			}
+
+			const int own = folio.value(e, 0);
+			for (Element *partner : linked) {
+				const int other = folio.value(partner, 0);
+				if (own == other) {
+					++same_folio;   // legitimate -- counted, not reported
+					continue;
+				}
+				const bool wrong_way =
+						(lt == Element::NextReport && other < own)
+						|| (lt == Element::PreviousReport && other > own);
+				if (!wrong_way)
+					continue;
+
+				++inverted;
+				out << "INVERTED: "
+					<< (lt == Element::NextReport
+						? QObject::tr("renvoi de folio suivant")
+						: QObject::tr("renvoi de folio precedent"))
+					<< " on folio " << own
+					<< " links to folio " << other << "\n";
+			}
+		}
+	}
+
+	out << "checked " << checked << " folio-reference arrow(s): "
+		<< inverted << " inverted, "
+		<< same_folio << " same-folio (not an error), "
+		<< unlinked << " unlinked\n";
+	out.flush();
+	return inverted > 0 ? 1 : 0;
+}
+
 int exportLinks(QETProject &project, const QString &output)
 {
 	const QHash<Element *, int> folio = folioIndex(project);
@@ -811,6 +890,13 @@ int run(const QStringList &args)
 	if (format == "info")
 		return exportInfo(project, rest.value(1));
 
+	// --check-links is a diagnostic: it reports to stdout and takes no output
+	// file, so it must be handled before the <output> argument is required.
+	// --check-links is a diagnostic: it reports to stdout and takes no output
+	// file, so it must be handled before the <output> argument is required.
+	if (format == "checklinks")
+		return checkLinks(project);
+
 	const QString output = rest.value(1);
 	if (output.isEmpty()) {
 		err << "Usage: qelectrotech " << flag
@@ -825,6 +911,7 @@ int run(const QStringList &args)
 		return exportBom(project, output);
 	if (format == "nets")
 		return exportNets(project, output);
+
 	if (format == "links")
 		return exportLinks(project, output);
 	if (format == "resave")
