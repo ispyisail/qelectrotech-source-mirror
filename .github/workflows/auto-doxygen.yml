@@ -12,7 +12,7 @@ jobs:
        contents: write    
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         submodules: 'recursive'
         show-progress: ''
@@ -42,9 +42,12 @@ jobs:
           cicd
         delete-branch: true
         add-paths: doc/*.qch
-    - uses: actions/upload-pages-artifact@v3
-      with: 
+    - uses: actions/upload-pages-artifact@v5
+      with:
        path: ${{ github.workspace }}/doc/html/
+       # v4 stopped bundling dotfiles by default; v3 included them. Keep the
+       # artifact byte-identical to what this job produced before the bump.
+       include-hidden-files: true
   deploy:
     # Add a dependency to the build job
     needs: doxygen
@@ -64,4 +67,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4 # or specific "vX.X.X" version tag for this action
+        uses: actions/deploy-pages@v5 # or specific "vX.X.X" version tag for this action
