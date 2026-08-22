@@ -22,6 +22,7 @@
 #include "conductorproperties.h"
 #include "dataBase/projectdatabase.h"
 #include "diagram.h"
+#include "diagramcommands.h"
 #include "diagramcontent.h"
 #include "diagramcontext.h"
 #include "elementsmover.h"
@@ -842,6 +843,59 @@ bool applyLink(Diagram *diagram, const QJsonArray &uuids)
 	return true;
 }
 
+/// Resolve a "paste" op: duplicate the current selection, positioning the
+/// pasted copy's bounding-rect top-left at (x, y) -- matching
+/// Diagram::fromXml()'s own "position" semantics exactly (its doc comment:
+/// "the imported elements are positioned in such a way that the upper left
+/// corner of the smallest rectangle that can surround them all is at this
+/// position").
+///
+/// Deliberately bypasses the system clipboard DiagramView::copy()/paste()
+/// actually use (QApplication::clipboard()) -- checked, not assumed unsafe:
+/// a real OS clipboard is exactly the kind of environment-dependent
+/// resource that is fragile or unavailable under offscreen/headless
+/// operation, the same category of risk --offscreen QPA exists to route
+/// around for rendering. Reuses the exact same two calls copy()/paste()
+/// make around that clipboard step instead -- diagram->toXml(false, true)
+/// (wholeContent=false, is_copy_command=true, identical to what copy()
+/// puts on the clipboard) to serialize the current selection, then
+/// diagram->fromXml(...) (identical to what paste() does with clipboard
+/// text) to import it back in -- so the op exercises the real
+/// serialize/import code path, just without the OS clipboard hop in the
+/// middle.
+///
+/// Checked the read-only guard's exact location before relying on it:
+/// DiagramView::paste() checks `m_diagram->isReadOnly()` itself (not
+/// copy()), so that is checked here explicitly rather than assumed to be
+/// enforced somewhere inside fromXml().
+bool applyPaste(Diagram *diagram, qreal x, qreal y)
+{
+	if (diagram->isReadOnly()) {
+		err << "test-ops: paste -- diagram is read-only.\n";
+		return false;
+	}
+
+	QDomDocument doc = diagram->toXml(false, true);
+	if (doc.documentElement().isNull()) {
+		err << "test-ops: paste -- nothing selected to copy.\n";
+		return false;
+	}
+
+	DiagramContent content_pasted;
+	diagram->fromXml(doc, QPointF(x, y), false, &content_pasted);
+
+	if (!content_pasted.count()) {
+		err << "test-ops: paste -- nothing was added.\n";
+		return false;
+	}
+
+	diagram->clearSelection();
+	diagram->undoStack().push(new PasteDiagramCommand(diagram, content_pasted));
+	out << "test-ops: paste -- pasted " << content_pasted.count()
+		<< " item(s), bounding-rect top-left at " << x << "," << y << "\n";
+	return true;
+}
+
 /// Resolve a "move" op: translate the current selection by (dx, dy).
 ///
 /// Reuses ElementsMover (elementsmover.h) directly rather than
@@ -1037,6 +1091,15 @@ int applyTestOps(QETProject &project, const QString &opsPath, const QString &out
 		}
 		else if (kind == "link") {
 			if (!applyLink(diagram, op.value("uuids").toArray())) {
+				return 1;
+			}
+		}
+		else if (kind == "paste") {
+			if (!op.contains("x") || !op.contains("y")) {
+				err << "test-ops: paste -- requires \"x\" and \"y\".\n";
+				return 2;
+			}
+			if (!applyPaste(diagram, op.value("x").toDouble(), op.value("y").toDouble())) {
 				return 1;
 			}
 		}

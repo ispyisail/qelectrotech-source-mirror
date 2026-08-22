@@ -133,6 +133,16 @@ namespace CLIExport {
 		            (differing conductor text/function/tension across the
 		            merged potential) -- always run test-ops with a timeout
 		            regardless.
+		        {"op": "paste", "x": 100, "y": 100}
+		            Duplicates the current selection, positioning the pasted
+		            copy's bounding-rect top-left at (x, y) -- the same
+		            "position" semantics Diagram::fromXml() itself documents.
+		            Bypasses the system clipboard DiagramView::copy()/paste()
+		            use (fragile/unavailable headless) but reuses their exact
+		            serialize (toXml) / import (fromXml) calls otherwise, so
+		            it exercises the real paste code path. Fails (exit 1) if
+		            the diagram is read-only or nothing is selected. Both
+		            keys are required.
 		        {"op": "move", "dx": 10, "dy": 0}
 		            Translates the current selection by (dx, dy), using the
 		            same ElementsMover class (elementsmover.h) the GUI's
