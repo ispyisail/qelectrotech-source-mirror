@@ -82,6 +82,17 @@ namespace CLIExport {
 		            Clears the diagram's selection, then selects every
 		            element whose uuid is listed. Unknown uuids are
 		            reported on stderr and otherwise ignored.
+		        {"op": "select_rect", "x": 0, "y": 0, "w": 100, "h": 100}
+		            Clears the diagram's selection, then selects every
+		            element whose scene bounding rect intersects the given
+		            rectangle -- a headless rubber-band drag. Matches QET's
+		            real default (DiagramView sets RubberBandDrag and never
+		            overrides the selection mode, so Qt's own default,
+		            Qt::IntersectsItemShape, applies); approximated here
+		            with bounding-rect intersection rather than exact
+		            painted shape, which agrees in the overwhelming
+		            majority of cases for QET's mostly-rectangular symbol
+		            bodies. All four keys are required.
 		        {"op": "delete"}
 		            Deletes the current selection (same command the GUI's
 		            "Delete" action pushes).

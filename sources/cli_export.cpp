@@ -696,6 +696,39 @@ void applySelect(Diagram *diagram, const QJsonArray &uuids)
 	}
 }
 
+/// Resolve a "select_rect" op: select every element whose scene bounding
+/// rect intersects the given rectangle, clearing and rebuilding the
+/// selection first.
+///
+/// Matches QET's actual rubber-band behaviour, not an assumption: QET sets
+/// QGraphicsView::RubberBandDrag on DiagramView (diagramview.cpp:322) and
+/// never calls setRubberBandSelectionMode(), so Qt's documented default
+/// applies -- Qt::IntersectsItemShape, items whose shape intersects the
+/// drag rectangle. This op approximates "shape" with sceneBoundingRect()
+/// rather than the exact painted QPainterPath: for QET's elements (mostly
+/// rectangular symbol bodies) the two agree in the overwhelming majority of
+/// cases, and the difference only matters for a rectangle edge that clips
+/// a non-rectangular element's corner -- a real but narrow gap, stated here
+/// rather than left implicit.
+void applySelectRect(Diagram *diagram, const QJsonObject &rectObj)
+{
+	const QRectF rect(
+		rectObj.value("x").toDouble(), rectObj.value("y").toDouble(),
+		rectObj.value("w").toDouble(), rectObj.value("h").toDouble()
+	);
+	diagram->clearSelection();
+	int matched = 0;
+	for (Element *e : diagram->elements()) {
+		if (e->sceneBoundingRect().intersects(rect)) {
+			e->setSelected(true);
+			++matched;
+		}
+	}
+	out << "test-ops: select_rect -- " << matched << " element(s) matched "
+		<< rect.x() << "," << rect.y() << " " << rect.width() << "x"
+		<< rect.height() << "\n";
+}
+
 /// Headless, scripted editing for automated regression testing. See
 /// cli_export.h for the op vocabulary and the JSON summary this prints.
 int applyTestOps(QETProject &project, const QString &opsPath, const QString &output)
@@ -731,6 +764,14 @@ int applyTestOps(QETProject &project, const QString &opsPath, const QString &out
 
 		if (kind == "select") {
 			applySelect(diagram, op.value("uuids").toArray());
+		}
+		else if (kind == "select_rect") {
+			if (!op.contains("x") || !op.contains("y")
+				|| !op.contains("w") || !op.contains("h")) {
+				err << "test-ops: select_rect -- requires x, y, w, h.\n";
+				return 2;
+			}
+			applySelectRect(diagram, op);
 		}
 		else if (kind == "delete") {
 			DiagramContent dc(diagram);
