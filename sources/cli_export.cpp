@@ -33,6 +33,7 @@
 #include "titleblockproperties.h"
 #include "undocommand/deleteqgraphicsitemcommand.h"
 #include "undocommand/rotateselectioncommand.h"
+#include "utils/conductorcreator.h"
 #include "wiringlistexport.h"
 
 // Private Qt PDF engine for drawHyperlink() — see pdf_links / projectprintwindow.
@@ -51,6 +52,7 @@
 #include <QPageLayout>
 #include <QPair>
 #include <QPainter>
+#include <QPolygonF>
 #include <QPdfWriter>
 #include <QSet>
 #include <QSqlError>
@@ -758,6 +760,92 @@ bool applyMove(Diagram *diagram, qreal dx, qreal dy)
 	return true;
 }
 
+/// Mirrors ConductorCreator::existingPotential() + the "potentials.size()
+/// >= 2" check in setUpPropertieToUse() (utils/conductorcreator.cpp) --
+/// both private, so reimplemented here from public Terminal/Conductor/
+/// Element APIs rather than called directly. Not a guess at the trigger
+/// condition: measured on real data first (see the DIAGNOSTIC-TOOLS-PLAN.md
+/// commit alongside this one) that a plain rectangle over any populated
+/// area of a real wiring diagram hits this in roughly half of cells, not
+/// the "narrow edge case" it looks like from the source alone -- a
+/// PotentialSelectorDialog under offscreen QPA hangs forever, so this
+/// counts distinct existing potentials among @p terminals and reports
+/// whether ConductorCreator would show that dialog, so the caller can
+/// refuse before ever constructing it.
+bool wouldNeedPotentialReconciliation(const QList<Terminal *> &terminals)
+{
+	QSet<Conductor *> potentials;
+	QSet<Terminal *> excluded;
+	for (Terminal *t : terminals) {
+		if (excluded.contains(t)) continue;
+		if (!t->conductors().isEmpty()) {
+			Conductor *c = t->conductors().first();
+			potentials.insert(c);
+			for (Conductor *rc : c->relatedPotentialConductors(false)) {
+				if (terminals.contains(rc->terminal1)) excluded.insert(rc->terminal1);
+				else if (terminals.contains(rc->terminal2)) excluded.insert(rc->terminal2);
+			}
+		} else if ((t->parentElement()->linkType() & Element::AllReport)
+				   && !t->parentElement()->isFree()) {
+			const QList<Element *> linked = t->parentElement()->linkedElements();
+			if (!linked.isEmpty() && !linked.first()->conductors().isEmpty())
+				potentials.insert(linked.first()->conductors().first());
+		}
+		if (potentials.size() >= 2) return true;
+	}
+	return false;
+}
+
+/// Resolve a "connect_rect" op: create conductor(s) between every terminal
+/// found inside the given rectangle. Calls ConductorCreator::create()
+/// directly (utils/conductorcreator.h) rather than reimplementing the
+/// hub-and-spoke conductor layout -- it is the same class QET's own
+/// rubber-band flood-connect tool uses, and the simple two-point "click a
+/// terminal, drag, click another terminal" wire draw is just this with
+/// exactly 2 terminals found (one conductor created between them).
+///
+/// Terminal discovery is duplicated here (not left to ConductorCreator::
+/// create()) so wouldNeedPotentialReconciliation() can inspect the list
+/// first and refuse before construction -- see that function's comment for
+/// why the modal-dialog risk it guards is common, not an edge case.
+/// Returns false (nothing done, caller should report an error) when the
+/// rectangle contains fewer than 2 terminals or would trigger that dialog.
+bool applyConnectRect(Diagram *diagram, const QJsonObject &rectObj)
+{
+	const QRectF rect(
+		rectObj.value("x").toDouble(), rectObj.value("y").toDouble(),
+		rectObj.value("w").toDouble(), rectObj.value("h").toDouble()
+	);
+	const QPolygonF polygon(rect);
+
+	QList<Terminal *> t_list;
+	for (QGraphicsItem *item : diagram->items(polygon))
+		if (item->type() == Terminal::Type)
+			t_list.append(qgraphicsitem_cast<Terminal *>(item));
+
+	if (t_list.size() <= 1) {
+		err << "test-ops: connect_rect -- fewer than 2 terminals in "
+			<< rect.x() << "," << rect.y() << " " << rect.width() << "x"
+			<< rect.height() << ", nothing to connect.\n";
+		return false;
+	}
+	if (wouldNeedPotentialReconciliation(t_list)) {
+		err << "test-ops: connect_rect -- rectangle spans terminals on 2+ "
+			   "existing potentials with different properties; QET would "
+			   "show a modal dialog to reconcile them, which hangs "
+			   "headless. Refusing rather than hanging.\n";
+		return false;
+	}
+
+	const int before = diagram->conductors().size();
+	ConductorCreator::create(diagram, polygon);
+	const int after = diagram->conductors().size();
+	out << "test-ops: connect_rect -- " << (after - before) << " conductor(s) created in "
+		<< rect.x() << "," << rect.y() << " " << rect.width() << "x"
+		<< rect.height() << "\n";
+	return true;
+}
+
 /// Headless, scripted editing for automated regression testing. See
 /// cli_export.h for the op vocabulary and the JSON summary this prints.
 int applyTestOps(QETProject &project, const QString &opsPath, const QString &output)
@@ -826,6 +914,16 @@ int applyTestOps(QETProject &project, const QString &opsPath, const QString &out
 				return 2;
 			}
 			applySelectRect(diagram, op);
+		}
+		else if (kind == "connect_rect") {
+			if (!op.contains("x") || !op.contains("y")
+				|| !op.contains("w") || !op.contains("h")) {
+				err << "test-ops: connect_rect -- requires x, y, w, h.\n";
+				return 2;
+			}
+			if (!applyConnectRect(diagram, op)) {
+				return 1;
+			}
 		}
 		else if (kind == "move") {
 			if (!op.contains("dx") || !op.contains("dy")) {

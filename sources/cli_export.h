@@ -102,6 +102,23 @@ namespace CLIExport {
 		            painted shape, which agrees in the overwhelming
 		            majority of cases for QET's mostly-rectangular symbol
 		            bodies. All four keys are required.
+		        {"op": "connect_rect", "x": 0, "y": 0, "w": 100, "h": 100}
+		            Creates conductor(s) between every terminal found inside
+		            the given rectangle (ConductorCreator::create(),
+		            utils/conductorcreator.h) -- the same class QET's
+		            rubber-band flood-connect tool uses. Exactly 2 terminals
+		            in the rectangle -> 1 new conductor (the simple wire-draw
+		            case); 3+ -> a hub-and-spoke potential, same as the GUI
+		            flood tool; 0 or 1 -> no-op. All four keys are required.
+		            If the rectangle spans terminals on 2+ existing
+		            potentials with different properties, QET would show a
+		            modal properties-reconciliation dialog to resolve them,
+		            which hangs under headless/offscreen operation -- measured
+		            on real data to be common for any rectangle over a
+		            populated area of a real diagram, not a rare edge case, so
+		            this is detected up front (mirroring ConductorCreator's
+		            own, private, trigger check) and the op fails (exit 1)
+		            instead of hanging.
 		        {"op": "move", "dx": 10, "dy": 0}
 		            Translates the current selection by (dx, dy), using the
 		            same ElementsMover class (elementsmover.h) the GUI's
