@@ -74,10 +74,19 @@ namespace CLIExport {
 		      field.  E.g. --set-titleblock in.qet out.qet revision=B date=today
 		test-ops: headless, scripted editing for automated regression
 		      testing (not an end-user feature). Applies a JSON array of
-		      operations to the FIRST diagram's selection state, in the
-		      same code path the GUI uses (DeleteQGraphicsItemCommand,
+		      operations to a diagram's selection state (the first diagram
+		      by default -- see set_diagram below to target another one),
+		      in the same code path the GUI uses (DeleteQGraphicsItemCommand,
 		      RotateSelectionCommand, QUndoStack::undo/redo), then saves.
 		      Ops (each a JSON object with an "op" key):
+		        {"op": "set_diagram", "index": 0}
+		            Switches which diagram subsequent ops target, addressed
+		            by the same 0-based position QETProject::folioIndex()
+		            reports (project.diagrams().at(index)) -- so a folio's
+		            index here is the same number that identifies it
+		            elsewhere in QET, not an arbitrary list slot. Clears
+		            the new diagram's selection. "index" is required and
+		            must be in range, or the op fails (exit 2 / 1).
 		        {"op": "select", "uuids": ["{...}", ...]}
 		            Clears the diagram's selection, then selects every
 		            element whose uuid is listed. Unknown uuids are

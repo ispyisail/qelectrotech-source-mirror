@@ -762,7 +762,32 @@ int applyTestOps(QETProject &project, const QString &opsPath, const QString &out
 		const QJsonObject op = v.toObject();
 		const QString kind = op.value("op").toString();
 
-		if (kind == "select") {
+		if (kind == "set_diagram") {
+			// Which folio subsequent ops target. project.diagrams() is
+			// QETProject::m_diagrams_list -- the same ordered list
+			// folioIndex() computes positions from (0-based: folioIndex()'s
+			// own doc comment says "returns 0 for the first diagram, not
+			// 1"), maintained directly by insert/remove, not subject to the
+			// QGraphicsScene::items()/toXml() traversal-order
+			// non-determinism that affects element and conductor ordering
+			// (FINDINGS.md F002-F004). Verified this is the right list to
+			// index, not assumed.
+			if (!op.contains("index")) {
+				err << "test-ops: set_diagram -- requires \"index\".\n";
+				return 2;
+			}
+			const int idx = op.value("index").toInt(-1);
+			const QList<Diagram *> all_diagrams = project.diagrams();
+			if (idx < 0 || idx >= all_diagrams.size()) {
+				err << "test-ops: set_diagram -- index " << idx
+					<< " out of range (project has " << all_diagrams.size()
+					<< " folio(s)).\n";
+				return 1;
+			}
+			diagram = all_diagrams.at(idx);
+			diagram->clearSelection();
+		}
+		else if (kind == "select") {
 			applySelect(diagram, op.value("uuids").toArray());
 		}
 		else if (kind == "select_rect") {
