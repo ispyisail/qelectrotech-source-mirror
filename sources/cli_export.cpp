@@ -29,9 +29,11 @@
 #include "qetgraphicsitem/conductor.h"
 #include "qetgraphicsitem/element.h"
 #include "qetgraphicsitem/terminal.h"
+#include "qet.h"
 #include "qetproject.h"
 #include "titleblockproperties.h"
 #include "undocommand/deleteqgraphicsitemcommand.h"
+#include "undocommand/linkelementcommand.h"
 #include "undocommand/rotateselectioncommand.h"
 #include "utils/conductorcreator.h"
 #include "wiringlistexport.h"
@@ -732,6 +734,114 @@ void applySelectRect(Diagram *diagram, const QJsonObject &rectObj)
 		<< rect.height() << "\n";
 }
 
+/// Mirrors LinkElementCommand::redo()'s report-report PotentialSelectorDialog
+/// trigger (undocommand/linkelementcommand.cpp) -- checked source before
+/// relying on it, same discipline connect_rect's guard used.
+///
+/// A first version of this function checked ONLY primary's own pre-existing
+/// potential (mirroring redo()'s c_list construction line-for-line) and was
+/// proven wrong by a live hang, not caught by reading the source a second
+/// time: redo() calls makeLink() -- which actually applies the element-level
+/// link -- BEFORE running this check, so relatedPotentialConductors() at
+/// that point traverses THROUGH the just-made link (a folio-report link is
+/// an electrical continuation, so the potential graph crosses it) and sees
+/// both sides. This guard runs BEFORE any link is made (that's the whole
+/// point -- decide whether to make it), so relatedPotentialConductors()
+/// here only ever sees primary's side, silently under-approximating the
+/// real check and letting a genuine trigger through. Fixed by unioning
+/// BOTH sides' pre-existing potentials directly instead of relying on a
+/// not-yet-applied link to connect them -- verified against the exact
+/// fixture that hung under the first version, not just re-derived from
+/// reading the source again.
+bool wouldShowPotentialSelectorDialog(Element *primary, const QList<Element *> &linked_after)
+{
+	if (!(primary->linkType() & Element::AllReport)) return false;
+	if (primary->conductors().isEmpty()) return false;
+	if (linked_after.isEmpty()) return false;
+
+	QSet<Conductor *> c_list;
+	c_list << primary->conductors().first();
+	for (Conductor *c : primary->conductors().first()->relatedPotentialConductors())
+		c_list << c;
+	for (Element *linked : linked_after) {
+		if (linked->conductors().isEmpty()) continue;
+		c_list << linked->conductors().first();
+		for (Conductor *c : linked->conductors().first()->relatedPotentialConductors())
+			c_list << c;
+	}
+	if (c_list.size() < 2) return false;
+
+	QStringList str_txt, str_funct, str_tens;
+	for (Conductor *c : std::as_const(c_list)) {
+		str_txt   << c->properties().text;
+		str_funct << c->properties().m_function;
+		str_tens  << c->properties().m_tension_protocol;
+		str_tens  << c->properties().m_wire_color;
+		str_tens  << c->properties().m_wire_section;
+	}
+	return !QET::eachStrIsEqual(str_txt) || !QET::eachStrIsEqual(str_funct)
+		|| !QET::eachStrIsEqual(str_tens);
+}
+
+/// Resolve a "link" op: link uuids[0] (the "primary"/edited element, matching
+/// LinkElementCommand's own model -- the element the command is constructed
+/// for) to every other element in uuids, via LinkElementCommand -- the same
+/// class the GUI's cross-reference linking uses. Requires at least 2 uuids.
+///
+/// Validates every candidate with LinkElementCommand::isLinkable() up front
+/// and refuses (no push) if any candidate isn't linkable, rather than
+/// relying on setUpNewLink()'s own behavior of silently skipping
+/// non-linkable candidates -- a caller asking to link a specific pair wants
+/// to know when that didn't happen, not a partial, silently-smaller link.
+bool applyLink(Diagram *diagram, const QJsonArray &uuids)
+{
+	if (uuids.size() < 2) {
+		err << "test-ops: link -- requires at least 2 uuids (primary + one or more to link).\n";
+		return false;
+	}
+
+	QList<Element *> resolved;
+	const QList<Element *> elements = diagram->elements();
+	for (const QJsonValue &v : uuids) {
+		const QUuid target(v.toString());
+		Element *found = nullptr;
+		for (Element *e : elements) {
+			if (e->uuid() == target) { found = e; break; }
+		}
+		if (!found) {
+			err << "test-ops: link -- uuid not found in diagram: " << v.toString() << "\n";
+			return false;
+		}
+		resolved << found;
+	}
+
+	Element *primary = resolved.first();
+	const QList<Element *> candidates = resolved.mid(1);
+
+	for (Element *c : candidates) {
+		if (!LinkElementCommand::isLinkable(primary, c)) {
+			err << "test-ops: link -- " << c->uuid().toString()
+				<< " is not linkable to " << primary->uuid().toString() << ".\n";
+			return false;
+		}
+	}
+
+	if (wouldShowPotentialSelectorDialog(primary, candidates)) {
+		err << "test-ops: link -- linking these reports would show a modal "
+			   "properties-reconciliation dialog (differing conductor "
+			   "text/function/tension across the merged potential), which "
+			   "hangs headless. Refusing rather than hanging.\n";
+		return false;
+	}
+
+	auto *cmd = new LinkElementCommand(primary);
+	cmd->setLink(candidates);
+	diagram->undoStack().push(cmd);
+	out << "test-ops: link -- linked " << primary->uuid().toString() << " to "
+		<< candidates.size() << " element(s).\n";
+	return true;
+}
+
 /// Resolve a "move" op: translate the current selection by (dx, dy).
 ///
 /// Reuses ElementsMover (elementsmover.h) directly rather than
@@ -922,6 +1032,11 @@ int applyTestOps(QETProject &project, const QString &opsPath, const QString &out
 				return 2;
 			}
 			if (!applyConnectRect(diagram, op)) {
+				return 1;
+			}
+		}
+		else if (kind == "link") {
+			if (!applyLink(diagram, op.value("uuids").toArray())) {
 				return 1;
 			}
 		}

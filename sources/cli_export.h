@@ -119,6 +119,20 @@ namespace CLIExport {
 		            this is detected up front (mirroring ConductorCreator's
 		            own, private, trigger check) and the op fails (exit 1)
 		            instead of hanging.
+		        {"op": "link", "uuids": ["{primary}", "{target}", ...]}
+		            Links uuids[0] (the element the link is edited FOR, e.g. a
+		            master or a folio-report element) to every other element
+		            in the list, via LinkElementCommand -- the same class the
+		            GUI's cross-reference linking uses. At least 2 uuids
+		            required. Every candidate is checked with
+		            LinkElementCommand::isLinkable() first; any non-linkable
+		            candidate fails the whole op (exit 1), rather than
+		            silently linking a smaller subset. Refuses (exit 1) rather
+		            than hanging if linking two folio-report elements would
+		            trigger QET's modal properties-reconciliation dialog
+		            (differing conductor text/function/tension across the
+		            merged potential) -- always run test-ops with a timeout
+		            regardless.
 		        {"op": "move", "dx": 10, "dy": 0}
 		            Translates the current selection by (dx, dy), using the
 		            same ElementsMover class (elementsmover.h) the GUI's
