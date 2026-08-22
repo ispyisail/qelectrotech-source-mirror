@@ -102,6 +102,14 @@ namespace CLIExport {
 		            painted shape, which agrees in the overwhelming
 		            majority of cases for QET's mostly-rectangular symbol
 		            bodies. All four keys are required.
+		        {"op": "move", "dx": 10, "dy": 0}
+		            Translates the current selection by (dx, dy), using the
+		            same ElementsMover class (elementsmover.h) the GUI's
+		            mouse-drag move uses, so attached conductors are
+		            recalculated exactly as they would be after a real drag,
+		            and a single-element move still triggers the project's
+		            auto-conductor connection when enabled. Both keys are
+		            required.
 		        {"op": "delete"}
 		            Deletes the current selection (same command the GUI's
 		            "Delete" action pushes).

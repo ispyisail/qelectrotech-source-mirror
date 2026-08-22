@@ -24,6 +24,7 @@
 #include "diagram.h"
 #include "diagramcontent.h"
 #include "diagramcontext.h"
+#include "elementsmover.h"
 #include "pdf_links.h"
 #include "qetgraphicsitem/conductor.h"
 #include "qetgraphicsitem/element.h"
@@ -729,6 +730,34 @@ void applySelectRect(Diagram *diagram, const QJsonObject &rectObj)
 		<< rect.height() << "\n";
 }
 
+/// Resolve a "move" op: translate the current selection by (dx, dy).
+///
+/// Reuses ElementsMover (elementsmover.h) directly rather than
+/// reimplementing conductor-path updates and undo-command construction --
+/// it is the same class QET's interactive mouse-drag uses
+/// (elementsmover.cpp: beginMovement/continueMovement/endMovement).
+/// Checked before using it headless, not assumed safe: MoveGraphicsItemCommand
+/// (undocommand/movegraphicsitemcommand.cpp) does NOT apply the position
+/// change itself on construction -- its first redo() is a deliberate no-op,
+/// because the GUI's live drag has already called setPos() on every item by
+/// the time endMovement() constructs and pushes the command. Pushing that
+/// command directly, without first moving the items the way
+/// continueMovement() does, would silently produce a no-op move with a
+/// working-looking undo/redo pair. Driving all three ElementsMover steps
+/// avoids that trap entirely. driver_item defaults to nullptr and
+/// beginMovement() itself tolerates an empty diagram->views() list, so no
+/// QGraphicsView is required.
+bool applyMove(Diagram *diagram, qreal dx, qreal dy)
+{
+	ElementsMover mover;
+	if (mover.beginMovement(diagram) < 0) {
+		return false; // nothing selected, or nothing movable in the selection
+	}
+	mover.continueMovement(QPointF(dx, dy));
+	mover.endMovement();
+	return true;
+}
+
 /// Headless, scripted editing for automated regression testing. See
 /// cli_export.h for the op vocabulary and the JSON summary this prints.
 int applyTestOps(QETProject &project, const QString &opsPath, const QString &output)
@@ -797,6 +826,16 @@ int applyTestOps(QETProject &project, const QString &opsPath, const QString &out
 				return 2;
 			}
 			applySelectRect(diagram, op);
+		}
+		else if (kind == "move") {
+			if (!op.contains("dx") || !op.contains("dy")) {
+				err << "test-ops: move -- requires \"dx\" and \"dy\".\n";
+				return 2;
+			}
+			if (!applyMove(diagram, op.value("dx").toDouble(), op.value("dy").toDouble())) {
+				err << "test-ops: move -- nothing selected/movable, no-op.\n";
+				return 1;
+			}
 		}
 		else if (kind == "delete") {
 			DiagramContent dc(diagram);
