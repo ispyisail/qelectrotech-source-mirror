@@ -36,6 +36,7 @@
 #include "qetproject.h"
 #include "titleblockproperties.h"
 #include "undocommand/changeelementinformationcommand.h"
+#include "diagramview.h"
 #include "undocommand/deleteqgraphicsitemcommand.h"
 #include "undocommand/linkelementcommand.h"
 #include "undocommand/rotateselectioncommand.h"
@@ -1358,6 +1359,97 @@ int applyTestOps(QETProject &project, const QString &opsPath, const QString &out
 			if (!opNumber(op, "angle", &angle))
 				return 2;
 			applyRotateTexts(diagram, angle);
+		}
+		else if (kind == "save_macro") {
+			// Writes the current selection to a .qetmak file, through
+			// DiagramView::writeMacroFromSelection() -- the same writer the
+			// GUI's "create template from selection" uses, split out of it so
+			// there is one implementation rather than two. There is no
+			// .qetmak anywhere in the shipped corpus, so before this op the
+			// macro import path could not be tested with example data at all.
+			if (rejectUnsupportedArgs(op, "save_macro", {"path"}))
+				return 2;
+			const QString path = op.value("path").toString();
+			if (path.isEmpty()) {
+				err << "test-ops: save_macro -- \"path\" is required.\n";
+				return 2;
+			}
+			if (diagram->selectedItems().isEmpty()) {
+				err << "test-ops: save_macro -- nothing selected, no-op.\n";
+				return 1;
+			}
+			if (!DiagramView::writeMacroFromSelection(diagram, path)) {
+				err << "test-ops: save_macro -- could not write " << path << "\n";
+				return 1;
+			}
+			out << "test-ops: save_macro -- wrote " << path << "\n";
+		}
+		else if (kind == "set_plc_master") {
+			// Turn an element into a PLC master carrying an IO table.
+			//
+			// This is not element information, so set_property cannot reach
+			// it: PlcMasterData is its own structure on ElementData, written
+			// to <plcMasterData>. Mirrors what MasterPropertiesWidget does
+			// when the user edits the IO table -- build the data, setElementData,
+			// update. There is no undo command for PLC data in the GUI either.
+			if (rejectUnsupportedArgs(op, "set_plc_master", {"uuid", "ios"}))
+				return 2;
+			const QString uuid = op.value("uuid").toString();
+			if (uuid.isEmpty() || !op.value("ios").isArray()) {
+				err << "test-ops: set_plc_master -- \"uuid\" and an \"ios\" array "
+					   "are required.\n";
+				return 2;
+			}
+			Element *target = nullptr;
+			for (Element *e : diagram->elements()) {
+				if (e->uuid() == QUuid(uuid)) { target = e; break; }
+			}
+			if (!target) {
+				err << "test-ops: set_plc_master -- uuid not found in diagram: "
+					<< uuid << "\n";
+				return 2;
+			}
+			ElementData ed = target->elementData();
+			if (ed.m_type != ElementData::Master) {
+				err << "test-ops: set_plc_master -- element is not a master "
+					   "(link_type must be master).\n";
+				return 1;
+			}
+			// The master TYPE (coil/protection/plc) is owned by the element
+			// definition, not the placed instance: it is read from
+			// <kindInformation name="type"> by ElementData::kindInfoFromXml(),
+			// and kindInfoToXml() is only ever called by the element editor
+			// writing a .elmt. Forcing it here would write a <plcMasterData>
+			// block that survives exactly one load and is then dropped by the
+			// next save, because the write is guarded on m_master_type ==
+			// PLC and that has reverted to whatever the definition says.
+			// Measured: 3 plcIO entries written, 0 after a --resave.
+			//
+			// So refuse rather than produce a fixture that quietly decays.
+			// The element's own definition has to declare plc first.
+			if (ed.m_master_type != ElementData::PLC) {
+				err << "test-ops: set_plc_master -- this element's definition "
+					   "does not declare a PLC master, and master type cannot "
+					   "be set on a placed instance (it lives in the element "
+					   "definition). The IO table would not survive a save.\n";
+				return 1;
+			}
+			ElementData::PlcMasterData plc;
+			const QJsonArray ios = op.value("ios").toArray();
+			for (const QJsonValue &v : ios) {
+				const QJsonObject o = v.toObject();
+				ElementData::PlcIO io;
+				io.address      = o.value("address").toString();
+				io.functionText = o.value("function").toString();
+				io.comment      = o.value("comment").toString();
+				plc.ios.append(io);
+			}
+			ed.setPlcMasterData(plc);
+			target->setElementData(ed);
+			if (target->scene())
+				target->update();
+			out << "test-ops: set_plc_master -- " << plc.ios.size()
+				<< " IO entr(y/ies) on " << uuid << "\n";
 		}
 		else if (kind == "undo") {
 			diagram->undoStack().undo();

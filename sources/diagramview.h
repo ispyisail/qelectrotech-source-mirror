@@ -41,6 +41,10 @@ class DiagramView : public QGraphicsView
 	
 		// constructors, destructor
 	public:
+		/// Write @p diagram's current selection to @p full_path as a .qetmak
+		/// macro. Dialog-free half of createTemplateFromSelection(), so
+		/// --test-ops can exercise the same writer the GUI uses.
+		static bool writeMacroFromSelection(Diagram *diagram, const QString &full_path);
 		DiagramView(Diagram *diagram, QWidget * = nullptr);
 		~DiagramView() override;
 

@@ -188,6 +188,24 @@ namespace CLIExport {
 		            Rotates every conductor text in the current diagram
 		            (conductor texts are selected first, since
 		            RotateTextsCommand only acts on the selection).
+		        {"op": "save_macro", "path": "/tmp/x.qetmak"}
+		            Writes the current selection to a .qetmak macro file, via
+		            DiagramView::writeMacroFromSelection() -- the same writer the
+		            GUI's "create template from selection" uses. Fails (exit 1)
+		            if nothing is selected or the file cannot be written.
+		            There is no .qetmak anywhere in the shipped example corpus,
+		            so this is the only way to obtain one for a test.
+		        {"op": "set_plc_master", "uuid": "{...}", "ios": [
+		              {"address": "1.0", "function": "Motor K1", "comment": ""}]}
+		            Makes the element a PLC master and gives it an IO table.
+		            PlcMasterData is not element information, so set_property
+		            cannot reach it; this mirrors what MasterPropertiesWidget
+		            does when the IO table is edited. The element must already
+		            already be a PLC master (exit 1 otherwise): the master TYPE
+		            lives in the element definition, not the placed instance, so
+		            setting it here would write a block that survives one load
+		            and is dropped by the next save. Measured: 3 IO entries
+		            written, 0 after --resave.
 		        {"op": "undo"} / {"op": "redo"}
 		            One step on the current diagram's QUndoStack.
 		      On completion, prints a one-line JSON summary to stdout:

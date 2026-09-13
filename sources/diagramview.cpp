@@ -1280,7 +1280,33 @@ void DiagramView::createTemplateFromSelection()
 
 	qDebug() << "Will save template to:" << template_location.path();
 
-	QDomDocument content_xml = m_diagram->toXml(false, true);
+	if (writeMacroFromSelection(m_diagram, template_location.fileSystemPath())) {
+		QMessageBox::information(this, tr("Modèle enregistré"),
+								 tr("Le modèle a été enregistré avec succès sous :\n%1")
+								 .arg(template_location.fileSystemPath()));
+	} else {
+		QMessageBox::critical(this, tr("Erreur"), tr("Le fichier n'a pas pu être écrit."));
+	}
+}
+
+/**
+ * @brief DiagramView::writeMacroFromSelection
+ * Write the current selection of @p diagram to @p full_path as a .qetmak macro.
+ *
+ * Split out of createTemplateFromSelection() so the file-writing half can run
+ * without a dialog or a message box -- the --test-ops "save_macro" verb calls
+ * exactly this, so a headless test exercises the same writer the GUI uses
+ * rather than a second implementation that could drift from it.
+ *
+ * @return true if the file was written.
+ */
+bool DiagramView::writeMacroFromSelection(Diagram *diagram, const QString &full_path)
+{
+	if (!diagram || diagram->selectedItems().isEmpty() || full_path.isEmpty()) {
+		return false;
+	}
+
+	QDomDocument content_xml = diagram->toXml(false, true);
 
 	QDomDocument macro_doc;
 	QDomElement root = macro_doc.createElement("qet_macro");
@@ -1298,7 +1324,7 @@ void DiagramView::createTemplateFromSelection()
 
 		if (old_type.isEmpty()) continue;
 
-		ElementsLocation loc(old_type, m_diagram->project());
+		ElementsLocation loc(old_type, diagram->project());
 
 		QString clean_path = loc.collectionPath(false);
 
@@ -1330,26 +1356,21 @@ void DiagramView::createTemplateFromSelection()
 	QDomNode imported_node = macro_doc.importNode(content_xml.documentElement(), true);
 	content_container.appendChild(imported_node);
 
-	QString full_path = template_location.fileSystemPath();
-
 	QDir().mkpath(QFileInfo(full_path).absolutePath());
 
 	QFile file(full_path);
-	if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-		QTextStream out(&file);
-#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)	// ### Qt 6: remove
-		out.setCodec("UTF-8");	// Qt6 QTextStream defaults to UTF-8
-#endif
-		out << macro_doc.toString(4);
-		file.close();
-		qDebug() << "Template successfully saved to:" << full_path;
-
-		QMessageBox::information(this, tr("Modèle enregistré"),
-								 tr("Le modèle a été enregistré avec succès sous :\n%1").arg(full_path));
-	} else {
+	if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
 		qDebug() << "Error: Could not open file for writing:" << full_path;
-		QMessageBox::critical(this, tr("Erreur"), tr("Le fichier n'a pas pu être écrit."));
+		return false;
 	}
+	QTextStream out(&file);
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)	// ### Qt 6: remove
+	out.setCodec("UTF-8");	// Qt6 QTextStream defaults to UTF-8
+#endif
+	out << macro_doc.toString(4);
+	file.close();
+	qDebug() << "Template successfully saved to:" << full_path;
+	return true;
 }
 
 /**
