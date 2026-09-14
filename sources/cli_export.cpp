@@ -26,7 +26,10 @@
 #include "diagramcommands.h"
 #include "diagramcontent.h"
 #include "diagramcontext.h"
+#include "undocommand/addgraphicsobjectcommand.h"
+#include "ElementsCollection/elementslocation.h"
 #include "elementsmover.h"
+#include "factory/elementfactory.h"
 #include "pdf_links.h"
 #include "qetgraphicsitem/conductor.h"
 #include "qetgraphicsitem/conductortextitem.h"
@@ -1358,6 +1361,84 @@ int applyTestOps(QETProject &project, const QString &opsPath, const QString &out
 			if (!opNumber(op, "angle", &angle))
 				return 2;
 			applyRotateTexts(diagram, angle);
+		}
+		else if (kind == "add_element") {
+			// Place a library element on the current diagram.
+			//
+			// This is the one primitive the op vocabulary was missing for
+			// generating drawings from a list: paste only duplicates an
+			// existing selection, so nothing could introduce a symbol that
+			// was not already on the folio.
+			//
+			// Mirrors DiagramEventAddElement::addElement(): build through
+			// ElementFactory so the element is constructed exactly as the
+			// GUI builds it, then push AddGraphicsObjectCommand so the
+			// placement is a normal undoable step. Auto-break and
+			// auto-connect are deliberately NOT run here -- they are the
+			// interactive placement's behaviour, and a generator wants
+			// explicit connect_rect calls rather than conductors appearing
+			// on their own.
+			if (rejectUnsupportedArgs(op, "add_element",
+									  {"type", "x", "y", "rotation"}))
+				return 2;
+			const QString type = op.value("type").toString();
+			if (type.isEmpty() || !op.contains("x") || !op.contains("y")) {
+				err << "test-ops: add_element -- \"type\", \"x\" and \"y\" "
+					   "are required.\n";
+				return 2;
+			}
+			qreal ax = 0.0, ay = 0.0, arot = 0.0;
+			if (!opNumber(op, "x", &ax) || !opNumber(op, "y", &ay)
+				|| !opNumber(op, "rotation", &arot))
+				return 2;
+
+			ElementsLocation loc(type, &project);
+			if (!loc.exist()) {
+				err << "test-ops: add_element -- no such element: " << type
+					<< "\n";
+				return 1;
+			}
+			int state = 0;
+			Element *added = ElementFactory::Instance()->createElement(
+						loc, nullptr, &state);
+			if (state || !added) {
+				delete added;
+				err << "test-ops: add_element -- could not build " << type
+					<< " (factory state " << state << ").\n";
+				return 1;
+			}
+			added->setPos(QPointF(ax, ay));
+			added->setRotation(arot);
+			diagram->undoStack().push(
+						new AddGraphicsObjectCommand(added, diagram,
+													 QPointF(ax, ay)));
+			out << "test-ops: add_element -- " << type << " at "
+				<< ax << "," << ay << " uuid " << added->uuid().toString()
+				<< "\n";
+		}
+		else if (kind == "add_folio") {
+			// Append a folio and make it the target for subsequent ops, so a
+			// generator can emit one folio per row of its input without
+			// counting indices itself.
+			if (rejectUnsupportedArgs(op, "add_folio", {"title"}))
+				return 2;
+			Diagram *fresh = project.addNewDiagram();
+			if (!fresh) {
+				err << "test-ops: add_folio -- project is read only.\n";
+				return 1;
+			}
+			const QString folio_title = op.value("title").toString();
+			if (!folio_title.isEmpty()) {
+				auto props = fresh->border_and_titleblock.exportTitleBlock();
+				props.title = folio_title;
+				fresh->border_and_titleblock.importTitleBlock(props);
+			}
+			diagram = fresh;
+			out << "test-ops: add_folio -- folio "
+				<< project.diagrams().size() << " added"
+				<< (folio_title.isEmpty() ? QString()
+										  : QStringLiteral(" (%1)").arg(folio_title))
+				<< ", now the target\n";
 		}
 		else if (kind == "undo") {
 			diagram->undoStack().undo();
