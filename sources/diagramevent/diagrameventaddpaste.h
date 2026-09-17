@@ -72,6 +72,9 @@ class DiagramEventAddPaste : public DiagramEventInterface
 		void moveTo(const QPointF &scene_pos);
 		void commit();
 		void cancel();
+			///Undo the placement without emitting finish(), so the destructor
+			///can use it. cancel() is this plus the signal.
+		void removeItems();
 		void showHint();
 
 		DiagramContent m_content;

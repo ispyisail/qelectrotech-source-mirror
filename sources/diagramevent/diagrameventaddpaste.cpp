@@ -84,11 +84,19 @@ DiagramEventAddPaste::DiagramEventAddPaste(Diagram *diagram, const QPointF &star
 	If the placement never finished -- the editor closed, or another tool took
 	over -- the items are still on the folio with nothing on the undo stack to
 	account for them, so take them away.
+
+	Takes them away directly rather than through cancel(), because cancel()
+	emits finish() and Diagram's handler for that deletes m_event_interface --
+	which, while this destructor is running from Diagram::setEventInterface,
+	is still this object. Emitting here therefore deleted an object that was
+	already being destroyed (issue #898).
 */
 DiagramEventAddPaste::~DiagramEventAddPaste()
 {
 	if (!m_finished && m_diagram) {
-		cancel();
+		m_finished = true;
+		m_running = false;
+		removeItems();
 	}
 	if (m_status_bar) {
 		m_status_bar->clearMessage();
@@ -156,9 +164,16 @@ void DiagramEventAddPaste::mousePressEvent(QGraphicsSceneMouseEvent *event)
 	event->setAccepted(true);
 }
 
+	//commit() and cancel() both end in emit finish(), which Diagram answers by
+	//deleting this object -- so in the two handlers below the event is marked
+	//accepted *before* either is called. Touching anything afterwards would be
+	//working on a destroyed object.
+
 void DiagramEventAddPaste::mouseReleaseEvent(QGraphicsSceneMouseEvent *event)
 {
 	if (!m_running) return;
+
+	event->setAccepted(true);
 
 	if (event->button() == Qt::LeftButton) {
 		moveTo(event->scenePos());
@@ -166,7 +181,6 @@ void DiagramEventAddPaste::mouseReleaseEvent(QGraphicsSceneMouseEvent *event)
 	} else if (event->button() == Qt::RightButton) {
 		cancel();
 	}
-	event->setAccepted(true);
 }
 
 void DiagramEventAddPaste::keyPressEvent(QKeyEvent *event)
@@ -175,15 +189,15 @@ void DiagramEventAddPaste::keyPressEvent(QKeyEvent *event)
 
 	switch (event->key()) {
 		case Qt::Key_Escape:
-			cancel();
 			event->setAccepted(true);
+			cancel();
 			break;
 			//Return and Enter drop the paste where it stands, so the whole
 			//operation can be completed without a mouse.
 		case Qt::Key_Return:
 		case Qt::Key_Enter:
-			commit();
 			event->setAccepted(true);
+			commit();
 			break;
 		default:
 			break;
@@ -209,15 +223,15 @@ void DiagramEventAddPaste::commit()
 }
 
 /**
-	@brief DiagramEventAddPaste::cancel
-	Take the items back off the folio. Nothing was pushed to the undo stack,
-	so there is nothing to undo afterwards.
+	@brief DiagramEventAddPaste::removeItems
+	Take the items back off the folio and forget them.
+
+	Separate from cancel() so the destructor can undo the placement without
+	emitting finish() -- see the destructor for why that matters.
 */
-void DiagramEventAddPaste::cancel()
+void DiagramEventAddPaste::removeItems()
 {
-	if (m_finished || !m_diagram) return;
-	m_finished = true;
-	m_running = false;
+	if (!m_diagram) return;
 
 		//Conductors first: they hold pointers to the terminals of the
 		//elements below, so removing an element out from under one would
@@ -237,5 +251,23 @@ void DiagramEventAddPaste::cancel()
 
 	m_content.clear();
 	m_relative_pos.clear();
+}
+
+/**
+	@brief DiagramEventAddPaste::cancel
+	Take the items back off the folio. Nothing was pushed to the undo stack,
+	so there is nothing to undo afterwards.
+
+	finish() is emitted last and nothing may be done afterwards: Diagram's
+	handler for it deletes this object, so the emit is effectively
+	"delete this".
+*/
+void DiagramEventAddPaste::cancel()
+{
+	if (m_finished || !m_diagram) return;
+	m_finished = true;
+	m_running = false;
+
+	removeItems();
 	emit finish();
 }

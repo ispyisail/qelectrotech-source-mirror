@@ -728,6 +728,17 @@ void DiagramView::keyPressEvent(QKeyEvent *e)
 	switch(e -> key())
 	{
 		case Qt::Key_Escape:
+				//A placement in progress owns Escape: there it means "abandon
+				//the placement", not "clear the selection". Break out to
+				//QGraphicsView::keyPressEvent, which hands the key to the
+				//scene and so to the running DiagramEventInterface.
+				//A paste placement selects the items it is positioning, so
+				//without this Escape only ever cleared that selection and the
+				//placement could not be abandoned from the keyboard at all
+				//(issue #898).
+			if (m_diagram && m_diagram->isEventInterfaceRunning()) {
+				break;
+			}
 				//Tab cycles the folio's items rather than moving focus (see
 				//focusNextPrevChild above), so without this there would be no
 				//way off the canvas for someone working without a mouse.

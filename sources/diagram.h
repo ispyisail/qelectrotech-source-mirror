@@ -164,6 +164,10 @@ class Diagram : public QGraphicsScene
 		QUuid uuid();
 		void setEventInterface (DiagramEventInterface *event_interface);
 		void clearEventInterface();
+			///@return true while a placement tool (new element, paste, ...)
+			///owns the scene and is still running. Views use this to leave
+			///keys that the placement needs -- Escape above all -- alone.
+		bool isEventInterfaceRunning() const;
 
 		//methods related to autonum
 		QString conductorsAutonumName() const;

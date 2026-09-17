@@ -802,6 +802,15 @@ void Diagram::clearEventInterface()
 }
 
 /**
+	@brief Diagram::isEventInterfaceRunning
+	@return true while a placement tool owns the scene and is still running.
+*/
+bool Diagram::isEventInterfaceRunning() const
+{
+	return m_event_interface && m_event_interface->isRunning();
+}
+
+/**
 	@brief Diagram::conductorsAutonumName
 	@return the name of autonum to use.
 */
