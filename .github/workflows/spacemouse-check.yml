@@ -52,7 +52,17 @@ jobs:
           pkg=$(find /Volumes/3dx -maxdepth 2 -name '*.pkg' -o -maxdepth 2 -name '*.mpkg' | head -1)
           echo "installing $pkg"
           sudo installer -pkg "$pkg" -target / -verbose
-          sleep 15
+          # The installer asks for a restart, which a runner cannot do; start
+          # whatever launchd jobs it installed by hand instead.
+          ls -la /Library/LaunchAgents /Library/LaunchDaemons | grep -i 3dconn || true
+          ls /Applications /Applications/3Dconnexion 2>/dev/null | grep -i 3d || true
+          for f in /Library/LaunchDaemons/*3dconnexion* /Library/LaunchDaemons/*3Dconnexion*; do
+            [ -f "$f" ] && { echo "daemon $f"; cat "$f"; sudo launchctl bootstrap system "$f" || true; }
+          done
+          for f in /Library/LaunchAgents/*3dconnexion* /Library/LaunchAgents/*3Dconnexion*; do
+            [ -f "$f" ] && { echo "agent $f"; cat "$f"; launchctl bootstrap gui/$(id -u) "$f" || true; }
+          done
+          sleep 20
           ls /Library/Frameworks | grep -i 3dconn || true
           ps -A -o pid=,comm= | grep -i 3dx || true
           systemextensionsctl list || true
