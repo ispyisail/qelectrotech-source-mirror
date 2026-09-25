@@ -58,7 +58,7 @@ def emit(line):
     (sys.stdout is None), so SPACEMOUSE_CHECK_EVENTS can name a file instead."""
     path = os.environ.get('SPACEMOUSE_CHECK_EVENTS')
     if path:
-        with open(path, 'a') as f:
+        with open(path, 'a', encoding='utf-8') as f:
             f.write(line + '\n')
     elif sys.stdout:
         print(line, flush=True)

@@ -4,6 +4,11 @@ name: SpaceMouse Check (macOS)
 on:
   push:
     branches: [tools/spacemouse-check-mac]
+    paths:
+      - 'main.swift'
+      - 'Info.plist'
+      - 'build.sh'
+      - '.github/workflows/spacemouse-check.yml'
   workflow_dispatch:
 permissions:
   contents: write

@@ -6,6 +6,9 @@ name: SpaceMouse Check (Windows, Linux)
 on:
   push:
     branches: [tools/spacemouse-check-mac]
+    paths:
+      - 'gui/**'
+      - '.github/workflows/spacemouse-check-winlinux.yml'
   workflow_dispatch:
 permissions:
   contents: write
