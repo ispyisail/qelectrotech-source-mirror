@@ -1,0 +1,36 @@
+# Builds SpaceMouse Check on a macOS runner, smoke-tests it (no device
+# there), and publishes the zip as a release anyone can download.
+name: SpaceMouse Check (macOS)
+on:
+  push:
+    branches: [tools/spacemouse-check-mac]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: sh build.sh
+      - name: Self-test (no device on the runner)
+        run: |
+          build/SpaceMouseCheck.app/Contents/MacOS/SpaceMouseCheck --selftest selftest.json
+          python3 -c "import json; d=json.load(open('selftest.json')); assert d['hid_route']['open'] == 'no 3D mouse found', d; assert 'environment' in d; print('selftest ok')"
+          file build/SpaceMouseCheck.app/Contents/MacOS/SpaceMouseCheck
+          codesign --verify --verbose build/SpaceMouseCheck.app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SpaceMouseCheck
+          path: build/SpaceMouseCheck.zip
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=spacemouse-check-v1
+          gh release view "$tag" >/dev/null 2>&1 || \
+            gh release create "$tag" --target "$GITHUB_SHA" --prerelease \
+              --title "SpaceMouse Check for macOS" \
+              --notes "Diagnostic app for QElectroTech's 3D mouse support on macOS. See README."
+          gh release upload "$tag" build/SpaceMouseCheck.zip --clobber
