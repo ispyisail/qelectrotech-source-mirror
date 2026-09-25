@@ -1,0 +1,75 @@
+# SpaceMouse Check for Windows and Linux: gui/spacemouse_check.py (tkinter,
+# on top of gui/spacemouse_capture.py = misc/spacemouse-capture.py from
+# QElectroTech) packed by PyInstaller into one file each, and published to
+# the same release as the macOS app.
+name: SpaceMouse Check (Windows, Linux)
+on:
+  push:
+    branches: [tools/spacemouse-check-mac]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build
+        shell: bash
+        run: |
+          pip install -q pyinstaller
+          cd gui
+          pyinstaller --onefile --windowed --name SpaceMouseCheck-Windows spacemouse_check.py
+      - name: Self-test (no device on the runner)
+        shell: bash
+        run: |
+          export SPACEMOUSE_CHECK_EVENTS=$PWD/events.txt
+          gui/dist/SpaceMouseCheck-Windows.exe --selftest selftest.json
+          cat selftest.json
+          python -c "import json; d=json.load(open('selftest.json')); assert d['devices'] == [], d"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SpaceMouseCheck-Windows
+          path: gui/dist/SpaceMouseCheck-Windows.exe
+      - name: Publish
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload spacemouse-check-v1 gui/dist/SpaceMouseCheck-Windows.exe --clobber
+
+  linux:
+    # 22.04's glibc, so the binary runs on distributions from 2022 on.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q python3-tk python3-pip xvfb >/dev/null
+          python3 -m pip install -q --user pyinstaller
+          cd gui
+          python3 -m PyInstaller --onefile --name SpaceMouseCheck-Linux-x86_64 spacemouse_check.py
+      - name: Self-test (no device on the runner)
+        run: |
+          gui/dist/SpaceMouseCheck-Linux-x86_64 --selftest selftest.json
+          python3 -c "import json; d=json.load(open('selftest.json')); assert d['devices'] == [], d"
+      - name: End-to-end with a virtual 3D mouse
+        run: |
+          sudo modprobe uhid || true
+          if [ -e /dev/uhid ]; then
+            python3 gui/test_gui.py gui/dist/SpaceMouseCheck-Linux-x86_64
+          else
+            echo "::warning::no /dev/uhid on this runner, end-to-end test skipped"
+          fi
+      - name: Package
+        run: tar -C gui/dist -czf SpaceMouseCheck-Linux-x86_64.tar.gz SpaceMouseCheck-Linux-x86_64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SpaceMouseCheck-Linux
+          path: SpaceMouseCheck-Linux-x86_64.tar.gz
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload spacemouse-check-v1 SpaceMouseCheck-Linux-x86_64.tar.gz --clobber
