@@ -1,0 +1,138 @@
+name: Windows Startup Check
+
+# Starts a Windows package that "Windows Build" produced, on a real Windows
+# machine, and checks that QElectroTech opens its main window and keeps
+# running, and that a command-line verb answers. It rebuilds nothing, so it
+# takes minutes, and it can check any past build by run id.
+#
+# Wine (qelectrotech-docker's tools/wine-smoke) is the fast local loop; this is
+# the authority on "the package starts on Windows".
+
+on:
+  workflow_run:
+    workflows: ["Windows Build"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Windows Build run to check (empty: the latest successful one)"
+        required: false
+  push:
+    branches: [ci/windows-startup-check]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  startup:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Pick the build to check
+        id: pick
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RUN="${{ github.event.workflow_run.id || github.event.inputs.run_id }}"
+          if [ -z "$RUN" ]; then
+            RUN=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow windows-build.yml \
+                  --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+          fi
+          [ -n "$RUN" ] || { echo "no successful Windows Build run to check"; exit 1; }
+          SHA=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN" --jq .head_sha)
+          echo "Checking Windows Build run $RUN (commit $SHA)"
+          echo "run=$RUN" >> "$GITHUB_OUTPUT"
+
+      - name: Download the portable package
+        uses: actions/download-artifact@v8
+        with:
+          name: qelectrotech-windows-portable-qt6
+          path: pkg
+          run-id: ${{ steps.pick.outputs.run }}
+          github-token: ${{ github.token }}
+
+      - name: Unpack
+        shell: pwsh
+        run: |
+          # The artifact holds either the package tree or a zip of it.
+          $exe = Get-ChildItem pkg -Recurse -Filter QElectroTech.exe | Select-Object -First 1
+          if (-not $exe) {
+            $zip = Get-ChildItem pkg -Recurse -Filter *.zip | Select-Object -First 1
+            if (-not $zip) { throw "no QElectroTech.exe and no zip in the artifact" }
+            Expand-Archive $zip.FullName -DestinationPath unz
+            $exe = Get-ChildItem unz -Recurse -Filter QElectroTech.exe | Select-Object -First 1
+          }
+          if (-not $exe) { throw "no QElectroTech.exe in the package" }
+          "EXE=$($exe.FullName)" | Out-File -Append $env:GITHUB_ENV
+          "ROOT=$($exe.Directory.Parent.FullName)" | Out-File -Append $env:GITHUB_ENV
+          Write-Host "Package: $($exe.Directory.Parent.FullName)"
+
+      - name: Start QElectroTech and wait for its main window
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          Add-Type @"
+          using System; using System.Runtime.InteropServices;
+          public static class W {
+            [StructLayout(LayoutKind.Sequential)] public struct R { public int L, T, Rt, B; }
+            [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out R r);
+          }
+          "@
+          function Shot($name) {
+            $b = New-Object System.Drawing.Bitmap 1920, 1080
+            $g = [System.Drawing.Graphics]::FromImage($b)
+            $g.CopyFromScreen(0, 0, 0, 0, $b.Size)
+            $b.Save("$pwd\$name.png"); $g.Dispose(); $b.Dispose()
+          }
+
+          $p = Start-Process -FilePath $env:EXE -PassThru
+          $up = $false
+          for ($t = 0; $t -lt 120; $t++) {
+            Start-Sleep 1
+            $p.Refresh()
+            if ($p.HasExited) { Shot "startup"; throw "QElectroTech exited after ${t}s (code $($p.ExitCode))" }
+            if ($p.MainWindowHandle -ne 0 -and $p.MainWindowTitle -like "*QElectroTech*") {
+              $r = New-Object W+R
+              [void][W]::GetWindowRect($p.MainWindowHandle, [ref]$r)
+              # Wider than 800 px: the 700x451 splash screen has the same title.
+              if (($r.Rt - $r.L) -gt 800) { $up = $true; break }
+            }
+          }
+          if (-not $up) { Shot "startup"; throw "no main window within 120s" }
+          Write-Host "Main window '$($p.MainWindowTitle)' up after ${t}s"
+          Start-Sleep 10
+          $p.Refresh()
+          if ($p.HasExited) { Shot "startup"; throw "QElectroTech exited within 10s of showing its window (code $($p.ExitCode))" }
+          if (Get-Process WerFault -ErrorAction SilentlyContinue) { Shot "startup"; throw "Windows Error Reporting is running: a crash" }
+          Shot "startup"
+          Write-Host "Still running 10s later: passed"
+          Stop-Process $p -Force
+
+      - name: Command-line check (--info on an example project)
+        shell: pwsh
+        run: |
+          $out = Join-Path $pwd "info.json"
+          $p = Start-Process -FilePath $env:EXE `
+                 -ArgumentList "--info", "`"$env:ROOT\examples\741.qet`"" `
+                 -RedirectStandardOutput $out -RedirectStandardError "info.err" -Wait -PassThru
+          Get-Content $out | Select-Object -First 8
+          if ($p.ExitCode -ne 0) { throw "--info exited $($p.ExitCode)" }
+          $info = Get-Content $out -Raw | ConvertFrom-Json
+          if ($info.conductors -ne 67 -or $info.elements -ne 65) {
+            throw "--info gave conductors=$($info.conductors) elements=$($info.elements), expected 67 and 65"
+          }
+          Write-Host "--info on 741.qet: 65 elements, 67 conductors, as on Linux"
+
+      - name: Upload screenshot
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-startup-check
+          path: |
+            startup.png
+            info.json
+            info.err
+          if-no-files-found: ignore
