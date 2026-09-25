@@ -79,3 +79,51 @@ jobs:
         with:
           name: selftest-with-3dxware
           path: selftest.json
+
+  # QElectroTech itself with the 3DxWare backend (branch
+  # feat/spacemouse-3dxware-macos), on a runner with 3DxWare installed.
+  qet-with-3dxware:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ispyisail/qelectrotech-source-mirror
+          ref: feat/spacemouse-3dxware-macos
+          path: qet
+      - name: Dependencies
+        run: brew install qt hidapi ninja pkg-config
+      - name: Build (Qt 6, 3D mouse on, no KDE)
+        run: |
+          cmake -S qet -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DQT_VERSION_MAJOR=6 \
+            -DBUILD_WITH_KF=OFF -DQET_ENABLE_SPACEMOUSE=ON -DQET_SPACEMOUSE_BACKEND=hid \
+            -DCMAKE_PREFIX_PATH="$(brew --prefix qt)" 2>&1 | grep -iE "spacemouse|error" || true
+          cmake --build build
+      - name: Tests
+        run: cd build && QT_QPA_PLATFORM=offscreen ctest --output-on-failure
+      - name: Install 3DxWare 10.8.13
+        run: |
+          curl -sSfL -o 3dx.dmg "https://download.3dconnexion.com/drivers/mac/10-8-13_A881DAA9/3DxWareMac_v10-8-13_r3908.dmg"
+          hdiutil attach -nobrowse -mountpoint /Volumes/3dx 3dx.dmg
+          sudo installer -pkg "/Volumes/3dx/Install 3Dconnexion software.pkg" -target /
+      - name: Entitlement is what lets a hardened app load 3DxWare
+        run: |
+          t=build/tests/qttest/tst_spacemouseconnexion
+          echo "== hardened runtime, no entitlement (expected: refused)"
+          codesign --force --sign - --options=runtime "$t"
+          if QT_QPA_PLATFORM=offscreen "$t" realLibrary; then no_ent=loaded; else no_ent=refused; fi
+          echo "== hardened runtime, with misc/qelectrotech.entitlements (expected: loaded)"
+          codesign --force --sign - --options=runtime --entitlements qet/misc/qelectrotech.entitlements "$t"
+          QT_QPA_PLATFORM=offscreen "$t" realLibrary
+          echo "without entitlement: $no_ent; with: loaded"
+          [ "$no_ent" = refused ] || echo "::warning::the check did not discriminate: loaded without the entitlement too"
+      - name: QElectroTech starts with 3DxWare installed, and loads it
+        run: |
+          app=build/qelectrotech.app
+          codesign --force --deep --sign - --options=runtime --entitlements qet/misc/qelectrotech.entitlements "$app"
+          "$app/Contents/MacOS/qelectrotech" > qet.log 2>&1 &
+          pid=$!
+          sleep 25
+          kill -0 $pid || { echo "QElectroTech exited"; cat qet.log; exit 1; }
+          lsof -p $pid | grep -iE "3dconnexion|hidapi" || true
+          lsof -p $pid | grep -q 3DconnexionClient || { echo "::error::3DconnexionClient not loaded"; exit 1; }
+          kill $pid
