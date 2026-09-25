@@ -34,3 +34,35 @@ jobs:
               --title "SpaceMouse Check for macOS" \
               --notes "Diagnostic app for QElectroTech's 3D mouse support on macOS. See README."
           gh release upload "$tag" build/SpaceMouseCheck.zip --clobber
+
+  # Same app, on a runner with 3Dconnexion's real macOS driver installed.
+  # No device, so no motion: this proves the app loads the framework and
+  # registers with 3DxWare without crashing, and shows what 3DxWare installs.
+  with-3dxware:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: sh build.sh
+      - name: Install 3DxWare 10.8.13
+        run: |
+          curl -sSfL -o 3dx.dmg "https://download.3dconnexion.com/drivers/mac/10-8-13_A881DAA9/3DxWareMac_v10-8-13_r3908.dmg"
+          hdiutil attach -nobrowse -mountpoint /Volumes/3dx 3dx.dmg
+          ls -la /Volumes/3dx
+          pkg=$(find /Volumes/3dx -maxdepth 2 -name '*.pkg' -o -maxdepth 2 -name '*.mpkg' | head -1)
+          echo "installing $pkg"
+          sudo installer -pkg "$pkg" -target / -verbose
+          sleep 15
+          ls /Library/Frameworks | grep -i 3dconn || true
+          ps -A -o pid=,comm= | grep -i 3dx || true
+          systemextensionsctl list || true
+          kextstat -l 2>/dev/null | grep -i 3dconn || true
+      - name: Self-test with 3DxWare
+        run: |
+          build/SpaceMouseCheck.app/Contents/MacOS/SpaceMouseCheck --selftest selftest.json
+          python3 -c "import json; d=json.load(open('selftest.json'))['driver_route']; print(d); assert d.get('load') == 'ok' and d.get('set_handlers') == 0, d"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: selftest-with-3dxware
+          path: selftest.json

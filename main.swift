@@ -585,7 +585,14 @@ if args.count >= 3 && args[1] == "--selftest" {
     hid.close()
     out["hid_route"] = hid.info
     let driver = DriverRoute()
-    _ = driver.load()
+    if driver.load() {
+        // Register both ways, letting callbacks arrive, as the real run does.
+        for (key, sig) in [("client_own", ownSignature), ("client_wildcard", kConnexionClientWildcard)] {
+            driver.info[key] = Int(driver.registerClient(signature: sig))
+            RunLoop.main.run(until: Date().addingTimeInterval(2))
+            driver.unregisterClient()
+        }
+    }
     driver.shutdown()
     out["driver_route"] = driver.info
     let data = try! JSONSerialization.data(withJSONObject: out, options: [.prettyPrinted, .sortedKeys])
