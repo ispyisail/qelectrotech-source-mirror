@@ -105,17 +105,14 @@ jobs:
           curl -sSfL -o 3dx.dmg "https://download.3dconnexion.com/drivers/mac/10-8-13_A881DAA9/3DxWareMac_v10-8-13_r3908.dmg"
           hdiutil attach -nobrowse -mountpoint /Volumes/3dx 3dx.dmg
           sudo installer -pkg "/Volumes/3dx/Install 3Dconnexion software.pkg" -target /
-      - name: Entitlement is what lets a hardened app load 3DxWare
+      - name: A hardened, entitled build loads 3DxWare's library
+        # Ad-hoc signing does not enforce library validation (measured: it
+        # loads without the entitlement too), so this cannot show that a
+        # Developer ID build needs it -- only that the entitled one works.
         run: |
           t=build/tests/qttest/tst_spacemouseconnexion
-          echo "== hardened runtime, no entitlement (expected: refused)"
-          codesign --force --sign - --options=runtime "$t"
-          if QT_QPA_PLATFORM=offscreen "$t" realLibrary; then no_ent=loaded; else no_ent=refused; fi
-          echo "== hardened runtime, with misc/qelectrotech.entitlements (expected: loaded)"
           codesign --force --sign - --options=runtime --entitlements qet/misc/qelectrotech.entitlements "$t"
           QT_QPA_PLATFORM=offscreen "$t" realLibrary
-          echo "without entitlement: $no_ent; with: loaded"
-          [ "$no_ent" = refused ] || echo "::warning::the check did not discriminate: loaded without the entitlement too"
       - name: QElectroTech starts with 3DxWare installed, and loads it
         run: |
           app=build/qelectrotech.app

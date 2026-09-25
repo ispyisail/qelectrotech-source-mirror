@@ -334,6 +334,7 @@ final class Checker: NSObject, NSApplicationDelegate {
     var bucketStart = Date()
     var queue: [() -> Void] = []
     var timer: Timer?
+    var driverWorks = false
 
     func applicationDidFinishLaunching(_ n: Notification) {
         buildWindow()
@@ -488,8 +489,12 @@ final class Checker: NSObject, NSApplicationDelegate {
             driver.info["sample_own_signature"] = Array(driverBucket.prefix(20))
             driver.info["hid_reports_meanwhile"] = hidBucket.count
             log("   3DxWare delivered \(driverBucket.count) events; QElectroTech's way got \(hidBucket.count) meanwhile.")
+            if !driverBucket.isEmpty {
+                driverWorks = true      // keep this client for the named movements
+                return
+            }
             driver.unregisterClient()
-            if driverBucket.isEmpty {
+            do {
                 let id = driver.registerClient(signature: kConnexionClientWildcard)
                 driver.info["client_wildcard"] = Int(id)
                 log("   Nothing arrived; trying again as a system-wide client (\(id)).")
@@ -497,12 +502,33 @@ final class Checker: NSObject, NSApplicationDelegate {
         })
 
         timed("One last time: move the cap in every direction.", seconds: 6,
-              when: { [self] in driver.handlersInstalled && driver.clientID != 0 }, end: { [self] in
+              when: { [self] in driver.handlersInstalled && driver.clientID != 0 && !driverWorks }, end: { [self] in
             driver.info["events_wildcard"] = driverBucket.count
             driver.info["sample_wildcard"] = Array(driverBucket.prefix(20))
             log("   System-wide: 3DxWare delivered \(driverBucket.count) events.")
             driver.unregisterClient()
         })
+
+        // 3DxWare works: a few named movements through it, which check the
+        // axis mapping in QET's ConnexionBackend on a real device.
+        instant { [self] in
+            if driverWorks { log("\n   3DxWare works. A few named movements through it:") }
+        }
+        let driverSteps = [guidedSteps[1], guidedSteps[4], guidedSteps[5], guidedSteps[7], guidedSteps[10],
+                           ("buttons", "Press each button once, slowly, one at a time.", 10)]
+        for (key, text, secs) in driverSteps {
+            timed(text, seconds: secs, when: { [self] in driverWorks }, end: { [self] in
+                var steps = driver.info["steps"] as? [[String: Any]] ?? []
+                steps.append(["step": key, "events": driverBucket])
+                driver.info["steps"] = steps
+                var sum = [0, 0, 0, 0, 0, 0]
+                for e in driverBucket where e["command"] as? Int == 3 {
+                    for (i, a) in (e["axis"] as? [Int] ?? []).enumerated() where i < 6 { sum[i] += a }
+                }
+                log("   \(key): \(driverBucket.count) events, axis sums \(sum)")
+            })
+        }
+        instant { [self] in if driverWorks { driver.unregisterClient() } }
 
         instant { [self] in
             driver.shutdown()
