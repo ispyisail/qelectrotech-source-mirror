@@ -47,6 +47,8 @@
 #include <QDropEvent>
 #include <QPainter>
 #include <QPointer>
+#include <QSet>
+#include <algorithm>
 
 /**
 	Constructeur
@@ -98,6 +100,9 @@ DiagramView::DiagramView(Diagram *diagram, QWidget *parent) :
 	// Setup the action to create a template
 	m_create_template = new QAction(tr("Créer un template", "context menu action"), this);
 	connect(m_create_template, &QAction::triggered, this, &DiagramView::createTemplateFromSelection);
+
+		//Filled each time the context menu opens, see updateFolioReportMenu()
+	m_folio_report_menu = new QMenu(tr("Renvoi de folio"), this);
 
 		//setup three separators, to be use in context menu
 	for(int i=0 ; i<3 ; ++i)
@@ -1510,10 +1515,17 @@ QList<QAction *> DiagramView::contextMenuActions() const
 	{
 		if (m_diagram->selectedItems().isEmpty())
 		{
+				//Drawing comes first. The row and column actions change
+				//the folio's layout and are rarely wanted, so they sit one
+				//level down where a stray click cannot reach them.
 			list << m_paste_here;
 			list << m_separators.at(0);
+			list << qde->m_insert_last_element;
+			list << m_folio_report_menu->menuAction();
+			list << qde->m_add_item_menu->menuAction();
+			list << m_separators.at(1);
 			list << qde->m_edit_diagram_properties;
-			list << qde->m_row_column_actions_group.actions();
+			list << qde->m_row_column_menu->menuAction();
 		}
 		else
 		{
@@ -1529,11 +1541,19 @@ QList<QAction *> DiagramView::contextMenuActions() const
 			list << qde->m_depth_action_group->actions();
 		}
 
-			//Remove from the context menu the actions which are disabled.
+			//Remove from the context menu the actions which are disabled,
+			//and the submenus in which every action is disabled.
 		const QList<QAction *> actions = list;
 		for(QAction *action : actions)
 		{
-			if (!action->isEnabled()) {
+			bool usable = action->isEnabled();
+			if (usable && action->menu())
+			{
+				const QList<QAction *> sub_actions = action->menu()->actions();
+				usable = std::any_of(sub_actions.cbegin(), sub_actions.cend(),
+									 [](QAction *a) { return a->isEnabled(); });
+			}
+			if (!usable) {
 				list.removeAll(action);
 			}
 		}
@@ -1621,6 +1641,7 @@ void DiagramView::contextMenuEvent(QContextMenuEvent *e)
 	{
 		m_paste_here_pos = menu_pos;
 		m_paste_here->setEnabled(Diagram::clipboardMayContainDiagram());
+		updateFolioReportMenu();
 	}
 
 	QList <QAction *> list = contextMenuActions();
@@ -1630,6 +1651,78 @@ void DiagramView::contextMenuEvent(QContextMenuEvent *e)
 		context_menu->addActions(list);
 		context_menu->popup(menu_global_pos);
 		e->accept();
+	}
+}
+
+/**
+	@brief DiagramView::updateFolioReportMenu
+	Fill the "Renvoi de folio" submenu of the context menu with the folio
+	report elements this project already uses -- the ones in its embedded
+	collection -- or, when it has none yet, the coming and going arrows of
+	the common collection. An entry places its element where the context
+	menu was opened. Left empty, and so hidden, on a read-only diagram.
+*/
+void DiagramView::updateFolioReportMenu()
+{
+	m_folio_report_menu->clear();
+	if (m_diagram->isReadOnly()) {
+		return;
+	}
+
+	QList<ElementsLocation> locations;
+	QETProject *project = m_diagram->project();
+	XmlElementCollection *collection =
+		project ? project->embeddedElementCollection() : nullptr;
+	if (collection)
+	{
+		QSet<QString> names;
+		const QDomNodeList definitions =
+			collection->root().elementsByTagName(QStringLiteral("definition"));
+		for (int i = 0 ; i < definitions.count() ; ++i)
+		{
+			const QDomElement definition = definitions.at(i).toElement();
+			const QString link_type = definition.attribute(QStringLiteral("link_type"));
+			if (link_type != QLatin1String("next_report")
+			    && link_type != QLatin1String("previous_report")) {
+				continue;
+			}
+			const ElementsLocation location =
+				collection->domToLocation(definition.parentNode().toElement());
+				//A project keeps dated copies of the same element
+				//(01previous_folio-20140521204742.elmt), so list each name once.
+			if (!location.exist() || names.contains(location.name())) {
+				continue;
+			}
+			names.insert(location.name());
+			locations << location;
+		}
+	}
+
+	if (locations.isEmpty())
+	{
+		for (const auto path : {
+			 "common://10_electric/10_allpole/100_folio_referencing/01coming_arrow.elmt",
+			 "common://10_electric/10_allpole/100_folio_referencing/02going_arrow.elmt"})
+		{
+			const ElementsLocation location(QString::fromLatin1(path));
+			if (location.exist()) {
+				locations << location;
+			}
+		}
+	}
+
+	std::sort(locations.begin(), locations.end(),
+		  [](const ElementsLocation &a, const ElementsLocation &b) {
+		return a.name().localeAwareCompare(b.name()) < 0;
+	});
+
+	for (const ElementsLocation &location : std::as_const(locations))
+	{
+		QAction *action = m_folio_report_menu->addAction(location.icon(),
+								 location.name());
+		connect(action, &QAction::triggered, this, [this, location]() {
+			startElementPlacement(location, mapToScene(m_paste_here_pos));
+		});
 	}
 }
 
