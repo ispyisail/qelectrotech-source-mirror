@@ -76,6 +76,9 @@ class DiagramView : public PaletteGraphicsView
 		QPointF           m_drag_last_pos;
 		bool              m_fresh_focus_in,
 						  m_first_activation = true;
+		/// True while the view pans because Ctrl+Shift is held, as opposed
+		/// to the visualisation mode chosen from the toolbar.
+		bool m_ctrl_shift_panning = false;
 		QList<QAction *>  m_separators;
 		QPolygonF m_free_rubberband;
 		bool m_free_rubberbanding = false;
@@ -84,7 +87,8 @@ class DiagramView : public PaletteGraphicsView
 		bool m_cell_rulers_shown = false;
 		/// Last viewport transform the rulers were painted for
 		QTransform m_rulers_transform;
-		
+		bool m_cell_lines_shown = false;
+
 		
 	public:
 		QString title() const;
@@ -100,17 +104,19 @@ class DiagramView : public PaletteGraphicsView
 		/// cursor query (QCursor::pos()/setPos() are silently ignored by
 		/// several window managers and compositors, Wayland included).
 		QPoint lastMousePos() const { return m_last_mouse_pos; }
-		void setCellRulersShown(bool shown);
 	
 		bool startElementPlacement(const ElementsLocation &location,
 					   const QPointF &scene_pos);
 		QPointF defaultPlacementPos() const;
+		void setCellRulersShown(bool shown);
+		void setCellLinesShown(bool shown);
 
 	protected:
 		void mouseDoubleClickEvent(QMouseEvent *) override;
 		void contextMenuEvent(QContextMenuEvent *) override;
 		void wheelEvent(QWheelEvent *) override;
 		void focusInEvent(QFocusEvent *) override;
+		void focusOutEvent(QFocusEvent *) override;
 		void keyPressEvent(QKeyEvent *) override;
 		void keyReleaseEvent(QKeyEvent *) override;
 		bool event(QEvent *) override;
@@ -119,6 +125,7 @@ class DiagramView : public PaletteGraphicsView
 		bool m_releasing_focus = false;
 		void paintEvent(QPaintEvent *event) override;
 		bool viewportEvent(QEvent *event) override;
+		void drawBackground(QPainter *painter, const QRectF &rect) override;
 		void paintingInverted(bool inverted) override;
 		void mousePressEvent(QMouseEvent *) override;
 		void mouseMoveEvent(QMouseEvent *) override;
@@ -142,10 +149,10 @@ class DiagramView : public PaletteGraphicsView
 		QRectF viewedSceneRect() const;
 		bool mustIntegrateTitleBlockTemplate(const TitleBlockTemplateLocation &) const;
 		bool gestures() const;
-		void showContextToolbar(const QPoint &viewport_pos);
-		QList<QAction *> selectionCommands() const;
 		void updateCellRulers();
 		void placeCellRulers();
+		void showContextToolbar(const QPoint &viewport_pos);
+		QList<QAction *> selectionCommands() const;
 
 		/// Lowest and highest allowed value of the view transform scale (m11).
 		/// Prevents wheel-zoom from driving the transform to overflow, which
