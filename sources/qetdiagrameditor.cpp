@@ -23,6 +23,7 @@
 #include "ElementsCollection/elementscollectionwidget.h"
 #include "ElementsCollection/elementpickerpopup.h"
 #include "shortcutbarsettings.h"
+#include "commandsearchpopup.h"
 #include "qetgraphicsitem/conductor.h"
 #include "QWidgetAnimation/qwidgetanimation.h"
 #include "autoNum/ui/autonumberingdockwidget.h"
@@ -831,6 +832,27 @@ void QETDiagramEditor::setUpActions()
 		this, &QETDiagramEditor::repeatLastCommand);
 	addAction(m_repeat_last_command);
 
+		//Type to find and run any command, as SolidWorks' "Search Commands"
+		//and the command palette of many editors. Ctrl+Shift+P, the key those
+		//editors use, is taken by the autonumbering dock; M for "menu".
+	m_command_search = new QAction(tr("Rechercher une commande…"), this);
+	m_command_search->setStatusTip(
+		tr("Tapez une partie du nom d'une commande et appuyez sur Entrée pour la lancer",
+		   "status bar tip"));
+	ShortcutManager::instance().registerAction(
+		m_command_search, "diagrameditor.command_search",
+		tr("Éditeur de schémas"), Qt::CTRL | Qt::SHIFT | Qt::Key_M);
+	connect(m_command_search, &QAction::triggered, this, [this]() {
+		if (!m_command_search_popup) {
+			m_command_search_popup = new CommandSearchPopup(this);
+		}
+		const QRect area = geometry();
+		m_command_search_popup->popUpAt(
+			area.contains(QCursor::pos()) ? QCursor::pos()
+						      : area.center());
+	});
+	addAction(m_command_search);
+
 	m_delete_selection->setStatusTip( tr("Enlève les éléments sélectionnés du folio", "status bar tip"));
 	m_rotate_selection->setStatusTip( tr("Pivote les éléments et textes sélectionnés", "status bar tip"));
 	m_rotate_group_selection->setStatusTip( tr("Pivote la sélection comme un groupe autour de son centre, au lieu de chaque élément sur place", "status bar tip"));
@@ -1125,6 +1147,7 @@ void QETDiagramEditor::setUpMenu()
 	menu_edition -> addAction(m_show_element_picker);
 	menu_edition -> addAction(m_show_shortcut_bar);
 	menu_edition -> addAction(m_repeat_last_command);
+	menu_edition -> addAction(m_command_search);
 	menu_edition -> addSeparator();
 		//The same actions the "Ajouter" toolbar holds. They were toolbar-only,
 		//which left them unreachable for anyone working without a mouse: a

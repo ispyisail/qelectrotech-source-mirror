@@ -45,6 +45,7 @@ class RecentFiles;
 class DiagramPropertiesEditorDockWidget;
 class ElementsCollectionWidget;
 class ElementPickerPopup;
+class CommandSearchPopup;
 class AutoNumberingDockWidget;
 class TerminalNumberingDialog;
 
@@ -270,6 +271,8 @@ class QETDiagramEditor : public QETMainWindow
 		QAction *m_show_element_picker = nullptr;
 		QAction *m_show_shortcut_bar = nullptr;
 		QAction *m_repeat_last_command = nullptr;
+		QAction *m_command_search = nullptr;
+		CommandSearchPopup *m_command_search_popup = nullptr; ///< Built on first use
 			/// What Enter on the folio repeats
 		QPointer<QAction> m_last_command;
 		void setLastCommand(QAction *action);
