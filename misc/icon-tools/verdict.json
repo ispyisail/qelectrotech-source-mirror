@@ -1,0 +1,63 @@
+{
+ "_comment": "Human verdicts from a visual pass over all 9 review sheets (121 icons whose top candidate differed from the current asset). 'pick' names the candidate actually judged best -- often NOT the top-ranked one. Reject reasons are grouped so the failure modes are visible.",
+
+ "accept": {
+  "Home": "go-home", "Cancel": "dialog-cancel", "Settings": "settings-configure",
+  "Grid": "show-grid", "PartArc": "draw-ellipse-arc", "EndLineCircle": "draw-circle",
+  "Restore": "window-restore", "DocumentSaveAll": "document-save-all",
+  "EditDelete": "edit-delete", "ProjectClose": "project-development-close",
+  "Element": "component", "Remove": "remove", "ViewFitWidth": "zoom-fit-width",
+  "EditTableDeleteRow": "edit-table-delete-row", "PartTextField": "text-field",
+  "EditSelectAll": "edit-select-all", "textGroup": "edit-group", "Folder": "folder",
+  "UserInformations": "user-properties", "Flip": "object-flip-horizontal",
+  "XmlTextFile": "text-xml", "WindowNew": "window-new", "TitleBlock": "template",
+  "Lower": "layer-lower", "Raise": "layer-raise", "BringForward": "layer-top",
+  "ProjectProperties": "document-properties", "IC_CopyFile": "edit-copy",
+  "DialogInformation": "document-properties", "EditClearLocationBar": "edit-clear",
+  "resize_image": "image-resize", "GoUpDouble": "arrow-up-double",
+  "GoDownDouble": "arrow-down-double", "PartPolygon": "draw-polygon",
+  "QETDownload": "download", "FolderEdit": "folder-edit", "PartLine": "draw-line",
+  "QETDonate": "donate"
+ },
+
+ "maybe": {
+  "PartEllipse": "draw-ellipse -- theme glyph is filled, QET's outline style differs",
+  "PartRectangle": "draw-rectangle -- same filled-vs-outline mismatch",
+  "PartCircle": "draw-circle -- same filled-vs-outline mismatch",
+  "Hide": "visibility -- wrong polarity, need a struck-through eye",
+  "ZoomIn": "zoom-in -- QET's dashed selection box looks like a deliberate CAD metaphor",
+  "ZoomOut": "zoom-out -- same",
+  "TableOfContent": "insert-table", "PartText": "dialog-text-and-font",
+  "EndLineTriangle": "draw-triangle", "adding_image": "insert-image",
+  "Conductor": "draw-connector", "DiagramDelete": "delete", "FolderDelete": "delete",
+  "SinglePage": "document-single", "ElementNew": "component",
+  "ElementDelete": "component", "translation": "text-x-gettext",
+  "ViewFitWindow": "view_fit_to_page"
+ },
+
+ "reject": {
+  "domain_specific_no_equivalent": [
+   "ElementMaster", "ElementSlave", "ElementSmall", "ElementTerminal",
+   "ConductorEdit", "ConductorSettings", "Terminal", "TerminalStrip",
+   "EndLineDiamond", "EndLineNone", "EndLineSimple", "TitleBlockBottom",
+   "TitleBlockRight", "FolioXrefComing", "North", "South", "East", "West",
+   "AutoNum", "RunDxf", "Diagram", "NewDiagram", "DiagramBg", "Autoconnect",
+   "HotSpot", "listDrawings", "ProjectFile", "ProjectFileGP", "ProjectNew",
+   "DiagramAdd", "AddFolio", "FolderOnlyThis", "FolderShowAll", "FolderProperties"
+  ],
+  "token_collision": [
+   "FullScreenEnter -> key-enter", "FullScreenExit -> application-exit",
+   "SendBackward -> mail-send (should be layer-bottom, cf. layer-top)",
+   "Start -> call-start", "Printer -> printer-error", "Add -> add-placemark",
+   "PDF -> pdf-annotation", "DocumentSpreadsheet -> document-save",
+   "ViewMove -> edit-move (current hand/pan cursor is clearer)",
+   "EditText -> edit-select-text"
+  ],
+  "brand_must_not_change": [
+   "QtLogo", "QETLogo", "QETIcon", "QETVideo", "QETManual", "QETOxygenLogo"
+  ],
+  "theme_does_not_distinguish_variant": [
+   "PrintLandscape", "PrintPortrait", "PrintAllPages", "PrintTwoPages"
+  ]
+ }
+}
