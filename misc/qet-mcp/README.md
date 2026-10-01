@@ -41,6 +41,10 @@ here read the model.
 | `qet_element_search` | **find a symbol** in a collection by name (any language), type or terminal count |
 | `qet_check` | **design-rule checks** — duplicate labels, unlabelled masters, unnumbered conductors, empty folios |
 | `qet_query` | **ask the project database** — read-only SQL over the views and tables |
+| `qet_script_api` | **what a script can call** — every `qet.*` call of this build, and the header that makes a script a button |
+| `qet_script_test` | **try a script** on a copy of a project: what it would change, what it logged, its errors |
+| `qet_script_install` | **make a button** — store a script (and an SVG icon) where QElectroTech shows it in Projet > Scripts and the Scripts toolbar |
+| `qet_script_list`, `qet_script_read`, `qet_script_remove` | the stored scripts: list, read one to change it, delete one |
 
 `qet_export` and `qet_edit` launch QElectroTech. Everything else parses the
 file directly, which is faster, needs no display, and cannot be confused by
@@ -172,17 +176,17 @@ tools that read files work there: `qet_project_info`, `qet_elements`,
 `qet_conductors`, `qet_items`, `qet_diff`, `qet_scan`,
 `qet_element_info`, `qet_element_search` and `qet_element_build`.
 
-## Five tools need scripting switched on
+## Some tools need scripting switched on
 
 A QElectroTech with JavaScript scripting switched off refuses `--run`, and
 off is the default from
 [#984](https://github.com/qelectrotech/qelectrotech-source-mirror/pull/984)
-onwards. Five tools here drive it that way and stop working until it is
-turned on:
+onwards. These tools drive it that way, or store a script that runs when
+clicked, and stop working until it is turned on:
 
 | | |
 |---|---|
-| need `QET_ENABLE_SCRIPTING=1` | `qet_query`, `qet_continuity`, `qet_check`, `qet_project_new`, `qet_edit` |
+| need `QET_ENABLE_SCRIPTING=1` | `qet_query`, `qet_continuity`, `qet_check`, `qet_project_new`, `qet_edit`, `qet_script_api`, `qet_script_test`, `qet_script_install`, `qet_script_remove` |
 | unaffected | everything else — they read the `.qet` directly, or, in `qet_export`'s case, use a plain CLI flag |
 
 The variable goes in the environment this server is started in, which for an
@@ -193,7 +197,7 @@ configured this server and pointed it at a QElectroTech binary made that
 choice, and their interactive QElectroTech keeps whatever its own setting
 says.
 
-Without it, those five come back `"ok": false` with a `hint` naming the
+Without it, those come back `"ok": false` with a `hint` naming the
 variable. Older builds, from before the setting existed, need nothing.
 
 ## What the server is allowed to touch
@@ -246,6 +250,77 @@ The confinement is applied where tool arguments enter the server, not inside
 each tool. Importing `qet_mcp` and calling `tool_export()` from your own
 Python is not confined and is not meant to be — that is your code calling a
 library, and you already chose the paths.
+
+## Script buttons
+
+QElectroTech turns every `.js` file in its scripts folder that starts with a
+`// ==QETScript==` header into a command with an icon: in Projet > Scripts,
+on the Scripts toolbar, in command search and in the shortcut bar. A person
+can write that file by hand; an assistant uses the tools above. Both end
+with the same file, and an open QElectroTech picks it up without a restart.
+
+```js
+// ==QETScript==
+// @name     Add revision note
+// @icon     add-revision-note.svg
+// @tooltip  Puts a "Rev A" note on the folio on screen
+// @shortcut Ctrl+Alt+R
+// @context  canvas
+// ==/QETScript==
+qet.addText(qet.currentFolio(), "Rev A", 40, 40);
+```
+
+The usual round: `qet_script_api` for the calls, `qet_script_test` on a
+project until the diff is what was wanted, then `qet_script_install` with
+`test_project` set, so a script that fails is not stored. The assistant
+never presses the button: the user does, and one Ctrl+Z undoes the run.
+
+| | |
+|---|---|
+| folder | QElectroTech's data folder + `/scripts`: `~/.local/share/QElectroTech/QElectroTech/scripts` on Linux, `%APPDATA%\QElectroTech\QElectroTech\scripts` on Windows, `~/Library/Application Support/QElectroTech/QElectroTech/scripts` on macOS |
+| `QET_MCP_SCRIPTS_DIR` | another folder, for a QElectroTech started with `--data-dir` |
+
+The folder is chosen by the server, never by a call, and a script's id
+becomes its file name only if it is `a-z`, `0-9`, `-` and `_`. Storing or
+removing a script needs `QET_ENABLE_SCRIPTING=1` like an edit does: a
+stored script runs with the user's rights when they click it.
+
+## Live mode: working in the QElectroTech you have open
+
+Every tool above works on files, with no QElectroTech window involved. The
+three `qet_live_*` tools instead act on the project open in **your**
+QElectroTech, in front of you, so you can watch, stop or undo:
+
+| | |
+|---|---|
+| `qet_live_status` | what is on screen: project, folio, selection, last undo step, stored scripts |
+| `qet_live_run_script` | run script text on the open project: one undo step named "Assistant : …" |
+| `qet_live_run_stored` | press a stored script's button |
+| `qet_live_command` | an editor command from an allow-list that opens no dialog: selection, zoom, rotate, snap, group, reset wires |
+| `qet_live_show_folio` | show another folio |
+| `qet_live_undo_last` | undo the newest step, only if the assistant made it |
+| `qet_live_screenshot` | a picture of the folio on screen, as an MCP image |
+
+A script the assistant writes on the spot is shown to you first, with
+*Exécuter*, *Refuser* or *Toujours pour cette session*; the Assistant
+panel lists everything it did.
+
+QElectroTech only listens when three things are true:
+
+1. the server has `QET_ENABLE_SCRIPTING=1`, as for editing;
+2. in QElectroTech, Configurer > Général > "Autoriser un assistant IA à agir
+   sur le projet ouvert" is ticked (off by default);
+3. at this start, you answered *Continuer* to the warning QElectroTech shows
+   every time it starts with that setting on.
+
+While it listens, the status bar says so and shows the assistant's last
+action, with an *Arrêter* button that closes the channel for the rest of
+the session. Each action is one Ctrl+Z. A script's `qet.showMessage()` is
+logged instead of opening a box nobody asked for.
+
+The channel is a local socket only your user can open. QElectroTech writes
+its name and a random token to `live-session.json` in its data folder
+(next to `scripts`), and deletes the file when the channel closes.
 
 ## Worked examples
 
