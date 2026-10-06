@@ -61,8 +61,11 @@ namespace QET {
 			white becomes \a sheet, pure black becomes \a ink, and a red
 			line stays red, only lighter. Made for a rendering of a white
 			sheet that has to read on a dark palette, with sheet = Base and
-			ink = Text. The image must be opaque; an image in another format
-			is converted to RGB32 first.
+			ink = Text. The image must be opaque; an image in a format other
+			than RGB32 or ARGB32_Premultiplied is converted to RGB32 first.
+			In an ARGB32_Premultiplied image a pixel whose alpha is below
+			255 is kept as it is, only made opaque: that is how a picture
+			placed on the sheet keeps its own colors (DiagramImageItem).
 		*/
 		void invertLightness(QImage &image, const QColor &sheet = Qt::black,
 		                     const QColor &ink = Qt::white);

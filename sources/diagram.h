@@ -236,6 +236,7 @@ class Diagram : public QGraphicsScene
 		void setDisplayGrid(bool);
 		bool displayGrid();
 		void setInvertedLightness(bool);
+		bool invertedLightness() const;
 		void setDisplayGuides(bool);
 		bool displayGuides();
 		void updateProjectGuides(const QList<GuideProperties> &guides);
@@ -387,6 +388,15 @@ inline void Diagram::setDisplayGrid(bool dg) {
 */
 inline void Diagram::setInvertedLightness(bool inverted) {
 	m_inverted_lightness = inverted;
+}
+
+/**
+	@brief Diagram::invertedLightness
+	@return true while a view paints the diagram for an inverted display
+	(see setInvertedLightness()).
+*/
+inline bool Diagram::invertedLightness() const {
+	return m_inverted_lightness;
 }
 
 /**

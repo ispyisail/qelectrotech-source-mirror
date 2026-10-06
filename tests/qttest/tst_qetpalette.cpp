@@ -86,6 +86,7 @@ class tst_qetpalette : public QObject
 		void paletteViewDrawsTheRubberBand();
 		void paletteViewFollowsTheApplicationUnderAStyleSheet();
 		void paletteViewFillsWhatTheSceneLeavesBlank();
+		void paletteViewKeepsPictureColors();
 		void paletteViewErasesMovedChildren_data();
 		void paletteViewErasesMovedChildren();
 		void paletteViewErasesChildrenMovedWhilePainting_data();
@@ -837,6 +838,57 @@ void tst_qetpalette::paletteViewFillsWhatTheSceneLeavesBlank()
 	QCOMPARE(sheetColor(image), base);
 	QCOMPARE(image.pixelColor(100, 20), base);
 	QCOMPARE(image.pixelColor(100, 100), base);
+}
+
+/**
+	A picture marks the pixels it covers with an alpha of 254, the way
+	DiagramImageItem::keepColors() does, and the dark view shows them
+	with their own colors instead of their negative (#1340). A line drawn
+	over the picture afterwards is inverted like the rest of the folio,
+	and so is the sheet around it.
+*/
+void tst_qetpalette::paletteViewKeepsPictureColors()
+{
+	QApplication::setStyle(QStyleFactory::create("Fusion"));
+	QApplication::setPalette(QET::Palette::fusionDark());
+
+	class KeptPicture : public QGraphicsRectItem
+	{
+		public:
+			KeptPicture() : QGraphicsRectItem(0, 0, 80, 60) {}
+			void paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidget *) override
+			{
+				painter->fillRect(rect(), QColor(230, 140, 20));
+				painter->save();
+				painter->setCompositionMode(QPainter::CompositionMode_DestinationIn);
+				painter->fillRect(rect(), QColor(0, 0, 0, 254));
+				painter->restore();
+			}
+	};
+
+	QGraphicsScene scene(0, 0, 200, 120);
+	KeptPicture *picture = new KeptPicture;
+	picture->setPos(20, 20);
+	scene.addItem(picture);
+	QGraphicsLineItem *line = scene.addLine(10, 50, 190, 50, QPen(Qt::black, 4));
+	line->setZValue(1);
+	ProbeView view(&scene);
+	showAsSheet(view);
+	QVERIFY(QTest::qWaitForWindowExposed(&view));
+
+	const QImage image = view.viewport()->grab().toImage();
+	const QPalette dark = QET::Palette::fusionDark();
+	const QColor base = dark.color(QPalette::Active, QPalette::Base);
+	const QColor kept = image.pixelColor(40, 30);
+	QVERIFY2(qAbs(kept.red() - 230) <= 1 && qAbs(kept.green() - 140) <= 1
+	         && qAbs(kept.blue() - 20) <= 1,
+	         qPrintable(QString("the picture became %1").arg(kept.name())));
+	QCOMPARE(image.pixelColor(150, 100), base);
+	// Black ink comes out light both over the picture and on the sheet.
+	QVERIFY2(image.pixelColor(40, 50).lightness() > 150,
+	         qPrintable(image.pixelColor(40, 50).name()));
+	QVERIFY2(image.pixelColor(150, 50).lightness() > 150,
+	         qPrintable(image.pixelColor(150, 50).name()));
 }
 
 /**

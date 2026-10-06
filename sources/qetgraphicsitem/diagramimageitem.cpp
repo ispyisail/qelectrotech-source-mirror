@@ -90,6 +90,44 @@ DiagramImageItem::~DiagramImageItem()
 }
 
 /**
+	@brief DiagramImageItem::keepColors
+	On a dark palette the view inverts the lightness of the whole folio
+	after it is drawn (PaletteGraphicsView), which would show a photo as
+	its negative (#1340). Lower the alpha of the pixels the picture has
+	just covered to 254, which tells the inversion to leave them alone
+	(QET::Palette::invertLightness()). Done before the selection frame
+	and the label, which are drawn black like the rest of the folio and
+	have to be inverted with it; anything drawn over the picture later
+	makes its pixels opaque again, so it is inverted too. Transparent
+	parts of the picture are left to the sheet.
+	@param painter the painter the picture was drawn with
+*/
+void DiagramImageItem::keepColors(QPainter *painter)
+{
+	painter -> save();
+	painter -> setCompositionMode(QPainter::CompositionMode_DestinationIn);
+	if (!pixmap_.hasAlphaChannel()) {
+		painter -> fillRect(pixmap_.rect(), QColor(0, 0, 0, 254));
+	} else {
+		if (m_keep_mask_key != pixmap_.cacheKey()) {
+			// 254 where the picture is mostly opaque, 255 (no change)
+			// elsewhere.
+			QImage mask = pixmap_.toImage().convertToFormat(QImage::Format_ARGB32);
+			for (int y = 0; y < mask.height(); ++y) {
+				QRgb *line = reinterpret_cast<QRgb *>(mask.scanLine(y));
+				for (int x = 0; x < mask.width(); ++x)
+					line[x] = qAlpha(line[x]) >= 128 ? qRgba(0, 0, 0, 254)
+					                                 : qRgba(0, 0, 0, 255);
+			}
+			m_keep_mask = mask;
+			m_keep_mask_key = pixmap_.cacheKey();
+		}
+		painter -> drawImage(pixmap_.rect(), m_keep_mask);
+	}
+	painter -> restore();
+}
+
+/**
 	@brief DiagramImageItem::paint
 	Draw the pixmap.
 	@param painter the Qpainter to use for draw the pixmap
@@ -98,6 +136,8 @@ DiagramImageItem::~DiagramImageItem()
 */
 void DiagramImageItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget) {
 	painter -> drawPixmap(pixmap_.rect(),pixmap_);
+	if (diagram() && diagram() -> invertedLightness())
+		keepColors(painter);
 
 	Q_UNUSED(option); Q_UNUSED(widget);
 

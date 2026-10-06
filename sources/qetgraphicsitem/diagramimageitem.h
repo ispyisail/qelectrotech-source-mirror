@@ -24,6 +24,7 @@
 
 #include <QColor>
 #include <QFont>
+#include <QImage>
 #include <QList>
 #include <QUuid>
 #include <QStyleOptionGraphicsItem>
@@ -166,6 +167,7 @@ class DiagramImageItem : public QetGraphicsItem {
 	QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
 
 	private:
+	void keepColors(QPainter *painter);
 	void replaceImage();
 	void mirror(bool horizontal);
 	void setTransparentColor();
@@ -210,6 +212,10 @@ class DiagramImageItem : public QetGraphicsItem {
 	protected:
 	QUuid m_uuid = QUuid::createUuid();
 	QPixmap pixmap_;
+	// keepColors()'s mask for a picture with transparency, and the
+	// cacheKey() of the pixmap_ it was made from.
+	QImage m_keep_mask;
+	qint64 m_keep_mask_key = 0;
 	// The true, pristine original -- never itself cropped or colour-
 	// keyed. pixmap_ (the displayed result) is always re-derived from
 	// this plus m_crop_rect and m_transparent_colors (each colour

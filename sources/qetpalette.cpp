@@ -83,7 +83,10 @@ bool QET::Palette::isDark(const QPalette &palette)
 void QET::Palette::invertLightness(QImage &image, const QColor &sheet,
                                    const QColor &ink)
 {
-	if (image.format() != QImage::Format_RGB32)
+	// A premultiplied image may carry kept pixels (see the header); any
+	// other format is converted, which makes every pixel opaque.
+	if (image.format() != QImage::Format_RGB32
+	    && image.format() != QImage::Format_ARGB32_Premultiplied)
 		image.convertTo(QImage::Format_RGB32);
 
 	// One table per channel maps the inverted value (0 = was white,
@@ -106,6 +109,10 @@ void QET::Palette::invertLightness(QImage &image, const QColor &sheet,
 		quint32 *line = reinterpret_cast<quint32 *>(image.scanLine(y));
 		for (int x = 0, width = image.width(); x < width; ++x) {
 			const quint32 pixel = line[x];
+			if ((pixel >> 24) != 0xff) {
+				line[x] = pixel | 0xff000000u;
+				continue;
+			}
 			const int red   = (pixel >> 16) & 0xff;
 			const int green = (pixel >> 8) & 0xff;
 			const int blue  = pixel & 0xff;

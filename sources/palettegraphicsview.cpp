@@ -130,7 +130,9 @@ void PaletteGraphicsView::paintInverted(QPaintEvent *event)
 	const QSize size(qCeil(viewport()->width() * ratio), qCeil(viewport()->height() * ratio));
 	if (m_buffer.size() != size || m_buffer.devicePixelRatio() != ratio)
 	{
-		m_buffer = QImage(size, QImage::Format_RGB32);
+		// Premultiplied, not RGB32: the alpha channel carries the pixels
+		// a picture keeps (QET::Palette::invertLightness()).
+		m_buffer = QImage(size, QImage::Format_ARGB32_Premultiplied);
 		m_buffer.setDevicePixelRatio(ratio);
 	}
 
