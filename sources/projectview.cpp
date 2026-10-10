@@ -364,14 +364,21 @@ QString ProjectView::askUserForFilePath(bool assign) {
 	// extension at all whenever the portal didn't (bugtracker #270).
 	// Stripping any existing suffix first and re-appending it once is
 	// correct either way.
-	// A .qetz is kept as typed, or chosen through its filter.
-	const bool zipped = filepath.endsWith(".qetz", Qt::CaseInsensitive)
-			|| (selected_filter == qetz_filter
-				&& !filepath.endsWith(".qet", Qt::CaseInsensitive));
-	if (filepath.endsWith(".qetz", Qt::CaseInsensitive))
-		filepath.chop(5);
-	else if (filepath.endsWith(".qet", Qt::CaseInsensitive))
-		filepath.chop(4);
+	// Zipped (.qetz) when that file type is chosen, or when the name typed
+	// says .qetz anywhere in its trailing extensions: typing "plan.qetz"
+	// over the selected "untitled" of "untitled.qet" gives "plan.qetz.qet"
+	// with the GTK dialog, and still means a .qetz.
+	bool zipped = selected_filter == qetz_filter;
+	for (;;) {
+		if (filepath.endsWith(".qetz", Qt::CaseInsensitive)) {
+			filepath.chop(5);
+			zipped = true;
+		} else if (filepath.endsWith(".qet", Qt::CaseInsensitive)) {
+			filepath.chop(4);
+		} else {
+			break;
+		}
+	}
 	filepath += zipped ? ".qetz" : ".qet";
 
 	if (assign) {
