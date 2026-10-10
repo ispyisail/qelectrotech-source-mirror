@@ -165,6 +165,10 @@ set(QET_SRC_FILES
   ${QET_DIR}/sources/import/edz/lzma/LzmaDec.c
   ${QET_DIR}/sources/import/edz/lzma/Ppmd7.c
   ${QET_DIR}/sources/import/edz/lzma/Ppmd7Dec.c
+  ${QET_DIR}/sources/container/miniz/miniz.c
+  ${QET_DIR}/sources/container/miniz/miniz.h
+  ${QET_DIR}/sources/container/qetzip.cpp
+  ${QET_DIR}/sources/container/qetzip.h
   ${QET_DIR}/sources/borderproperties.cpp
   ${QET_DIR}/sources/borderproperties.h
   ${QET_DIR}/sources/bordertitleblock.cpp

@@ -1162,3 +1162,14 @@ if(Qt6_VERSION VERSION_LESS 6.5.0)
     endif()
   endforeach()
 endif()
+
+# The zip a .qetz project is stored in: round trip, same bytes twice,
+# unsafe entry names refused (sources/container/qetzip.*, bundled miniz).
+add_executable(
+  tst_qetzip
+  tst_qetzip.cpp
+  ${QET_DIR}/sources/container/qetzip.cpp
+  ${QET_DIR}/sources/container/miniz/miniz.c)
+add_test(NAME tst_qetzip COMMAND tst_qetzip)
+target_include_directories(tst_qetzip PRIVATE ${QET_DIR}/sources)
+target_link_libraries(tst_qetzip PRIVATE Qt::Test)
