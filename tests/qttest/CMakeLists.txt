@@ -1180,10 +1180,11 @@ add_executable(
   tst_qetcontainer
   tst_qetcontainer.cpp
   ${QET_DIR}/sources/container/qetcontainer.cpp
+  ${QET_DIR}/sources/container/qetcontainerdb.cpp
   ${QET_DIR}/sources/container/qetzip.cpp
   ${QET_DIR}/sources/container/miniz/miniz.c)
 add_test(NAME tst_qetcontainer COMMAND tst_qetcontainer)
 target_include_directories(tst_qetcontainer PRIVATE ${QET_DIR}/sources)
-target_link_libraries(tst_qetcontainer PRIVATE Qt::Test Qt::Xml)
+target_link_libraries(tst_qetcontainer PRIVATE Qt::Test Qt::Xml SQLite3::SQLite3)
 target_compile_definitions(tst_qetcontainer PRIVATE
   "QET_EXAMPLES_DIR=\"${QET_DIR}/examples\"")

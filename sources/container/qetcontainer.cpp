@@ -16,6 +16,7 @@
 	along with QElectroTech. If not, see <http://www.gnu.org/licenses/>.
 */
 #include "qetcontainer.h"
+#include "qetcontainerdb.h"
 
 #include <QCryptographicHash>
 #include <QHash>
@@ -180,6 +181,11 @@ QList<QetZip::Entry> QetContainer::split(const QDomDocument &project, const QStr
 		return {};
 	}
 
+		//The engineering data out of the document, into project.sqlite
+	const QByteArray database = QetContainerDb::extract(root, error);
+	if (database.isEmpty())
+		return {};
+
 	QList<QetZip::Entry> parts;
 	QSet<QString> taken;
 
@@ -245,6 +251,7 @@ QList<QetZip::Entry> QetContainer::split(const QDomDocument &project, const QStr
 	entries.append(QetZip::Entry{QStringLiteral("mimetype"), QByteArray(MimeType), false});
 	entries.append(QetZip::Entry{QStringLiteral("manifest.xml"), serialize(qetz), true});
 	entries.append(QetZip::Entry{QStringLiteral("project.xml"), serialize(root), true});
+	entries.append(QetZip::Entry{QStringLiteral("project.sqlite"), database, true});
 	entries += parts;
 	for (auto it = pictures.cbegin() ; it != pictures.cend() ; ++it)
 		entries.append(QetZip::Entry{it.key(), it.value(), false});   //PNG is compressed already
@@ -318,5 +325,11 @@ bool QetContainer::join(const QList<QetZip::Entry> &entries, QDomDocument *proje
 		image.insertBefore(project->createTextNode(QString::fromLatin1(files.value(file).toBase64())),
 						   image.firstChild());
 	}
+
+		//The engineering data back from project.sqlite (format 2 on)
+	if (files.contains(QStringLiteral("project.sqlite"))
+		&& !QetContainerDb::restore(project->documentElement(),
+									files.value(QStringLiteral("project.sqlite")), error))
+		return false;
 	return true;
 }

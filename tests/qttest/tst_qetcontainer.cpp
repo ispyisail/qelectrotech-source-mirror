@@ -8,6 +8,8 @@
 
 #include "container/qetcontainer.h"
 
+#include <sqlite3.h>
+
 // A project document split into the parts of a .qetz, zipped, unzipped and
 // joined back is the document it was: every example, and every .qet in the
 // folder QET_CONTAINER_CORPUS names, if set -- exactly, whitespace text
@@ -132,6 +134,53 @@ private slots:
 		QCOMPARE(whitespace_nodes(back), 0);
 	}
 
+	// The engineering data is in project.sqlite and nowhere else: the folio
+	// files hold no symbol information, links, wire numbers or title-block
+	// fields, and the database holds them all (industrial.qet: 50 folios).
+	void databaseHoldsTheData()
+	{
+		QDomDocument original;
+		const QList<QetZip::Entry> entries = splitFile(QStringLiteral(QET_EXAMPLES_DIR "/industrial.qet"), &original);
+		QVERIFY(!entries.isEmpty());
+		QByteArray database;
+		for (const QetZip::Entry &e : entries) {
+			if (e.name == QLatin1String("project.sqlite")) database = e.data;
+			if (e.name.startsWith(QStringLiteral("folios/")) || e.name == QLatin1String("project.xml")) {
+				QVERIFY2(!e.data.contains("<elementInformation "), qPrintable(e.name));
+				QVERIFY2(!e.data.contains("<link_uuid "), qPrintable(e.name));
+				QVERIFY2(!e.data.contains("<property "), qPrintable(e.name));
+				QVERIFY2(!QString::fromUtf8(e.data).contains(QRegularExpression(QStringLiteral("<conductor [^>]* num="))),
+						 qPrintable(e.name));
+			}
+		}
+		QVERIFY(database.startsWith("SQLite format 3"));
+
+		sqlite3 *db = nullptr;
+		QCOMPARE(sqlite3_open(":memory:", &db), SQLITE_OK);
+		unsigned char *copy = static_cast<unsigned char *>(sqlite3_malloc64(sqlite3_uint64(database.size())));
+		memcpy(copy, database.constData(), size_t(database.size()));
+		QCOMPARE(sqlite3_deserialize(db, "main", copy, database.size(), database.size(),
+									 SQLITE_DESERIALIZE_FREEONCLOSE), SQLITE_OK);
+		auto count = [db](const char *table) {
+			sqlite3_stmt *st = nullptr;
+			sqlite3_prepare_v2(db, (QByteArray("SELECT count(*) FROM ") + table).constData(), -1, &st, nullptr);
+			sqlite3_step(st);
+			const int n = sqlite3_column_int(st, 0);
+			sqlite3_finalize(st);
+			return n;
+		};
+		const QDomNodeList diagrams = original.elementsByTagName(QStringLiteral("diagram"));
+		QCOMPARE(count("folio"), int(diagrams.size()));
+		QCOMPARE(count("element"), int(original.elementsByTagName(QStringLiteral("element")).size())
+				 - int(original.elementsByTagName(QStringLiteral("collection")).at(0).toElement()
+					   .elementsByTagName(QStringLiteral("element")).size()));
+		QCOMPARE(count("element_info"), int(original.elementsByTagName(QStringLiteral("elementInformation")).size()));
+		QCOMPARE(count("link"), int(original.elementsByTagName(QStringLiteral("link_uuid")).size()));
+		QCOMPARE(count("conductor"), int(original.elementsByTagName(QStringLiteral("conductor")).size()));
+		QVERIFY(count("folio_property") + count("project_property") > 0);
+		sqlite3_close(db);
+	}
+
 	// The folio pictures leave the folios, once each
 	void picturesAreFiles()
 	{
@@ -161,7 +210,8 @@ private slots:
 		QVERIFY(!entries.isEmpty());
 		for (QetZip::Entry &e : entries)
 			if (e.name == QLatin1String("manifest.xml"))
-				e.data.replace("min-reader=\"1\"", "min-reader=\"9\"");
+				e.data = QString::fromUtf8(e.data).replace(QRegularExpression(QStringLiteral("min-reader=\"\\d+\"")),
+														   QStringLiteral("min-reader=\"9\"")).toUtf8();
 		QDomDocument back;
 		QString error;
 		QVERIFY(!QetContainer::join(entries, &back, &error));

@@ -168,6 +168,8 @@ set(QET_SRC_FILES
   ${QET_DIR}/sources/container/miniz/miniz.c
   ${QET_DIR}/sources/container/miniz/miniz.h
   ${QET_DIR}/sources/container/qetcontainer.cpp
+  ${QET_DIR}/sources/container/qetcontainerdb.cpp
+  ${QET_DIR}/sources/container/qetcontainerdb.h
   ${QET_DIR}/sources/container/qetcontainer.h
   ${QET_DIR}/sources/container/qetzip.cpp
   ${QET_DIR}/sources/container/qetzip.h
