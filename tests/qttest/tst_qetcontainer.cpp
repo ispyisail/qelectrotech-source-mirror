@@ -230,6 +230,36 @@ private slots:
 		QVERIFY2(error.contains(QStringLiteral("missing")), qPrintable(error));
 	}
 
+	// A crafted project.sqlite whose "element" is a view, not a table, is
+	// refused: nothing in a file's schema is trusted.
+	void viewInsteadOfTableRefused()
+	{
+		QDomDocument original;
+		QList<QetZip::Entry> entries = splitFile(QStringLiteral(QET_EXAMPLES_DIR "/perceuse.qet"), &original);
+		QVERIFY(!entries.isEmpty());
+		for (QetZip::Entry &e : entries) {
+			if (e.name != QLatin1String("project.sqlite")) continue;
+			sqlite3 *db = nullptr;
+			sqlite3_open(":memory:", &db);
+			unsigned char *copy = static_cast<unsigned char *>(sqlite3_malloc64(sqlite3_uint64(e.data.size())));
+			memcpy(copy, e.data.constData(), size_t(e.data.size()));
+			sqlite3_deserialize(db, "main", copy, e.data.size(), e.data.size(),
+								SQLITE_DESERIALIZE_FREEONCLOSE | SQLITE_DESERIALIZE_RESIZEABLE);
+			QCOMPARE(sqlite3_exec(db, "ALTER TABLE element RENAME TO element_data;"
+									  "CREATE VIEW element AS SELECT * FROM element_data;",
+								  nullptr, nullptr, nullptr), SQLITE_OK);
+			sqlite3_int64 size = 0;
+			unsigned char *bytes = sqlite3_serialize(db, "main", &size, 0);
+			e.data = QByteArray(reinterpret_cast<const char *>(bytes), qsizetype(size));
+			sqlite3_free(bytes);
+			sqlite3_close(db);
+		}
+		QDomDocument back;
+		QString error;
+		QVERIFY(!QetContainer::join(entries, &back, &error));
+		QVERIFY2(error.contains(QStringLiteral("element")), qPrintable(error));
+	}
+
 	void notAProjectRefused()
 	{
 		QDomDocument back;
