@@ -1173,3 +1173,17 @@ add_executable(
 add_test(NAME tst_qetzip COMMAND tst_qetzip)
 target_include_directories(tst_qetzip PRIVATE ${QET_DIR}/sources)
 target_link_libraries(tst_qetzip PRIVATE Qt::Test)
+
+# A project split into the parts of a .qetz and joined back is the same
+# document, on every example (and QET_CONTAINER_CORPUS if set).
+add_executable(
+  tst_qetcontainer
+  tst_qetcontainer.cpp
+  ${QET_DIR}/sources/container/qetcontainer.cpp
+  ${QET_DIR}/sources/container/qetzip.cpp
+  ${QET_DIR}/sources/container/miniz/miniz.c)
+add_test(NAME tst_qetcontainer COMMAND tst_qetcontainer)
+target_include_directories(tst_qetcontainer PRIVATE ${QET_DIR}/sources)
+target_link_libraries(tst_qetcontainer PRIVATE Qt::Test Qt::Xml)
+target_compile_definitions(tst_qetcontainer PRIVATE
+  "QET_EXAMPLES_DIR=\"${QET_DIR}/examples\"")
