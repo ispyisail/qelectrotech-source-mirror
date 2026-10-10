@@ -139,6 +139,9 @@ class Diagram : public QGraphicsScene
 		bool m_freeze_new_elements;
 		bool m_freeze_new_conductors_;
 		QUuid m_uuid = QUuid::createUuid();
+			/// The XML of this folio's items, while they are not built yet
+		QDomElement m_deferred;
+		bool m_loading_deferred = false;
 
 			//Selection before the current click, see completeGroupSelection()
 		QList<QPointer<QGraphicsObject>> m_previous_selection;
@@ -203,6 +206,11 @@ class Diagram : public QGraphicsScene
 				 QPointF = QPointF(),
 				 bool = true,
 				 DiagramContent * = nullptr);
+			/// false while this folio's items wait in its XML to be
+			/// built (QET_LAZY_FOLIOS, LAZY-FOLIO-PLAN.md)
+		bool isLoaded() const {return m_deferred.isNull();}
+		void ensureLoaded();
+		bool buildDeferred();
 		bool fromXml(QDomDocument &,
 			     QPointF = QPointF(),
 			     bool = true,

@@ -128,6 +128,9 @@ class Conductor : public QGraphicsObject
 		ConductorProperties properties() const;
 			/// This wire's own copy of its properties, whatever the store holds
 		ConductorProperties ownProperties() const {return m_properties;}
+			/// The order wires were made in this session: a project's are
+			/// made in the order its file lists them
+		quint64 creationRank() const {return m_creation_rank;}
 
 		void setProfile(const ConductorProfile &, Qt::Corner);
 		ConductorProfile profile(Qt::Corner) const;
@@ -227,6 +230,7 @@ class Conductor : public QGraphicsObject
 			/// file had none -- toXml() must not persist that value, or
 			/// every reload mints and saves a new random one (see #754).
 		bool m_persist_uuid = true;
+		quint64 m_creation_rank = 0;
 		void uuidChanged(const QUuid &old_uuid);
 		projectDataBase *placedStore() const;
 		void storeProperties();
