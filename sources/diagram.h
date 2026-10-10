@@ -209,6 +209,7 @@ class Diagram : public QGraphicsScene
 			/// false while this folio's items wait in its XML to be
 			/// built (QET_LAZY_FOLIOS, LAZY-FOLIO-PLAN.md)
 		bool isLoaded() const {return m_deferred.isNull();}
+		QDomElement deferredXml() const {return m_deferred;}
 		void ensureLoaded();
 		bool buildDeferred();
 		bool fromXml(QDomDocument &,
