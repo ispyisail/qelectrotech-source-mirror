@@ -179,6 +179,12 @@ def parse(data):
     document: it dropped every title block with an SVG logo.)"""
     if isinstance(data, (str, Path)):
         data = Path(data).read_bytes()
+    # A raw carriage return: QElectroTech keeps none (CR LF reads as LF, a
+    # lone CR is dropped, in text and attributes alike), where a parser
+    # following the XML rules reads a lone CR as LF -- "X\r\r\nY" gave two
+    # line breaks instead of QElectroTech's one (forum attachment 1328).
+    # Measured on master 13dbacef1. A written-out &#13; is not raw and stays.
+    data = data.replace(b"\r", b"")
     p = expat.ParserCreate()
     p.buffer_text = True
     stack, root = [], None

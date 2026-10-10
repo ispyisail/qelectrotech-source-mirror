@@ -48,8 +48,14 @@ does it only say where ink goes → folio file; can QElectroTech work it out
 | 4 GitHub issue attachments (up to 148 folios) | 4 / 4 | 4 / 4 |
 | a test file with symbols sharing a uuid (#1408) | 1 / 1 | 1 / 1 |
 | a test file with two terminal strips and bridges | 1 / 1 | 1 / 1 |
+| 302 forum attachments (QElectroTech 0.22 – 0.100) | 302 / 302 | 302 / 302 |
 
-41.3 MB of `.qet` became 9.3 MB of `.qetz`.
+All 342 projects come back the same through QElectroTech. Three more forum
+uploads are damaged files that QElectroTech refuses as well. One forum
+project crashed QElectroTech on opening, before any conversion; that is a
+QElectroTech bug, fixed separately.
+
+The forum's 126.4 MB of `.qet` became 32.5 MB of `.qetz`.
 
 ## Traps found on the way
 
