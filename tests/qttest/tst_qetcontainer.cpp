@@ -181,6 +181,46 @@ private slots:
 		sqlite3_close(db);
 	}
 
+	// Terminal strips move into the database, and come back exactly:
+	// industrial.qet with two strips on its own terminal symbols, parsed as
+	// a save leaves it (no whitespace text).
+	void terminalStripsInDatabase()
+	{
+		QByteArray xml = read(QStringLiteral(QET_EXAMPLES_DIR "/industrial.qet"));
+		const QByteArray strips =
+			"<terminal_strips>"
+			"<terminal_strip><terminal_strip_data uuid=\"{11111111-0000-4000-8000-000000000001}\"><informations>"
+			"<information name=\"installation\">=A1</information><information name=\"location\">+CAB1</information>"
+			"<information name=\"name\">X1</information><information name=\"comment\">main &amp; aux</information>"
+			"</informations></terminal_strip_data>"
+			"<layout><physical_terminal><real_terminal element_uuid=\"{c2180165-8d35-44eb-83c4-100395451915}\"/></physical_terminal>"
+			"<physical_terminal><real_terminal element_uuid=\"{05f681ee-04dd-489d-afc8-a646ec6016f9}\"/>"
+			"<real_terminal element_uuid=\"{a33935cf-671a-480f-9497-1a632eab7cbd}\"/></physical_terminal></layout>"
+			"<terminal_strip_bridge uuid=\"{22222222-0000-4000-8000-000000000001}\" color=\"#ff0000\"><real_terminals>"
+			"<real_terminal uuid=\"{c2180165-8d35-44eb-83c4-100395451915}\"/>"
+			"<real_terminal uuid=\"{05f681ee-04dd-489d-afc8-a646ec6016f9}\"/></real_terminals></terminal_strip_bridge>"
+			"</terminal_strip>"
+			"<terminal_strip><terminal_strip_data uuid=\"{11111111-0000-4000-8000-000000000002}\"><informations>"
+			"<information name=\"name\">X2</information></informations></terminal_strip_data>"
+			"<layout><physical_terminal><real_terminal element_uuid=\"{c96008ed-1c74-4c0a-836a-bd8458491a16}\"/></physical_terminal></layout>"
+			"</terminal_strip></terminal_strips>";
+		const int at = xml.indexOf("<collection");
+		QVERIFY(at > 0);
+		xml.insert(at, strips);
+		QDomDocument original;
+		QVERIFY(original.setContent(xml));   // as a save leaves it: no whitespace text
+		QString error;
+		const QList<QetZip::Entry> entries = QetContainer::split(original, QString(), &error);
+		QVERIFY2(!entries.isEmpty(), qPrintable(error));
+		for (const QetZip::Entry &e : entries)
+			if (e.name == QLatin1String("project.xml"))
+				QVERIFY2(!e.data.contains("<terminal_strip>"), "the strips stayed in project.xml");
+		QDomDocument back;
+		QVERIFY2(QetContainer::join(entries, &back, &error), qPrintable(error));
+		const QString d = difference(original.documentElement(), back.documentElement(), QString());
+		QVERIFY2(d.isEmpty(), qPrintable(d));
+	}
+
 	// The folio pictures leave the folios, once each
 	void picturesAreFiles()
 	{

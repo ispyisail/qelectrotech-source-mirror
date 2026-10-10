@@ -90,7 +90,16 @@ QString schema()
 		" name TEXT, value TEXT, attrs TEXT, PRIMARY KEY (element_key, ord));"
 		"CREATE TABLE link (element_key TEXT NOT NULL REFERENCES element, ord INTEGER NOT NULL,"
 		" linked_uuid TEXT, attrs TEXT, PRIMARY KEY (element_key, ord));"
-		"CREATE TABLE conductor (key TEXT PRIMARY KEY, folio_id TEXT NOT NULL REFERENCES folio, %3);")
+		"CREATE TABLE conductor (key TEXT PRIMARY KEY, folio_id TEXT NOT NULL REFERENCES folio, %3);"
+		"CREATE TABLE terminal_strip (uuid TEXT PRIMARY KEY, ord INTEGER NOT NULL UNIQUE,"
+		" installation TEXT, location TEXT, name TEXT, comment TEXT, description TEXT);"
+		"CREATE TABLE strip_terminal (strip_uuid TEXT NOT NULL REFERENCES terminal_strip,"
+		" pos INTEGER NOT NULL, level INTEGER NOT NULL, element_uuid TEXT,"
+		" PRIMARY KEY (strip_uuid, pos, level));"
+		"CREATE TABLE strip_bridge (uuid TEXT PRIMARY KEY, strip_uuid TEXT NOT NULL REFERENCES terminal_strip,"
+		" ord INTEGER NOT NULL, color TEXT);"
+		"CREATE TABLE strip_bridge_terminal (bridge_uuid TEXT NOT NULL REFERENCES strip_bridge,"
+		" ord INTEGER NOT NULL, element_uuid TEXT, PRIMARY KEY (bridge_uuid, ord));")
 			.arg(columns(FolioData), columns(ElementData), columns(ConductorData));
 }
 
@@ -273,6 +282,133 @@ void put(QDomElement e, const QStringList &names, const QVariantList &values, in
 		if (!values.at(from + i).isNull()) e.setAttribute(names.at(i), values.at(from + i).toString());
 }
 
+	//Same tags, attributes, text and child order
+bool sameTree(const QDomNode &a, const QDomNode &b)
+{
+	if (a.nodeType() != b.nodeType() || a.nodeName() != b.nodeName()) return false;
+	if (!a.isElement() && a.nodeValue() != b.nodeValue()) return false;
+	if (a.isElement()) {
+		const QDomNamedNodeMap am = a.attributes(), bm = b.attributes();
+		if (am.count() != bm.count()) return false;
+		for (int i = 0 ; i < am.count() ; ++i) {
+			const QDomAttr x = am.item(i).toAttr();
+			if (!bm.contains(x.name()) || bm.namedItem(x.name()).nodeValue() != x.value()) return false;
+		}
+	}
+	QDomNode ca = a.firstChild(), cb = b.firstChild();
+	for ( ; !ca.isNull() && !cb.isNull() ; ca = ca.nextSibling(), cb = cb.nextSibling())
+		if (!sameTree(ca, cb)) return false;
+	return ca.isNull() && cb.isNull();
+}
+
+bool hasWhitespaceText(const QDomNode &node)
+{
+	for (QDomNode n = node.firstChild() ; !n.isNull() ; n = n.nextSibling()) {
+		if (n.isText() && n.nodeValue().trimmed().isEmpty()) return true;
+		if (hasWhitespaceText(n)) return true;
+	}
+	return false;
+}
+
+const QStringList StripData = {
+	QStringLiteral("installation"), QStringLiteral("location"), QStringLiteral("name"),
+	QStringLiteral("comment"), QStringLiteral("description")};
+
+struct StripRows
+{
+	QList<QVariantList> strips, terminals, bridges, bridge_terminals;
+};
+
+	//<terminal_strips> as TerminalStrip::toXml() writes it, from @p rows
+QDomElement stripsXml(QDomDocument &document, const StripRows &rows)
+{
+	QDomElement root = document.createElement(QStringLiteral("terminal_strips"));
+	for (const QVariantList &st : rows.strips) {
+		const QString uuid = st.at(0).toString();
+		QDomElement strip = root.appendChild(document.createElement(QStringLiteral("terminal_strip"))).toElement();
+		QDomElement data = strip.appendChild(document.createElement(QStringLiteral("terminal_strip_data"))).toElement();
+		data.setAttribute(QStringLiteral("uuid"), uuid);
+		QDomElement infos = data.appendChild(document.createElement(QStringLiteral("informations"))).toElement();
+		for (int i = 0 ; i < StripData.size() ; ++i) {
+			const QVariant v = st.at(2 + i);
+			if (v.isNull()) continue;
+			QDomElement info = infos.appendChild(document.createElement(QStringLiteral("information"))).toElement();
+			info.setAttribute(QStringLiteral("name"), StripData.at(i));
+			info.appendChild(document.createTextNode(v.toString()));
+		}
+		QDomElement layout = strip.appendChild(document.createElement(QStringLiteral("layout"))).toElement();
+		QDomElement physical;
+		int last_pos = -1;
+		for (const QVariantList &t : rows.terminals) {
+			if (t.at(0).toString() != uuid) continue;
+			if (t.at(1).toInt() != last_pos) {
+				physical = layout.appendChild(document.createElement(QStringLiteral("physical_terminal"))).toElement();
+				last_pos = t.at(1).toInt();
+			}
+			QDomElement real = physical.appendChild(document.createElement(QStringLiteral("real_terminal"))).toElement();
+			if (!t.at(3).isNull()) real.setAttribute(QStringLiteral("element_uuid"), t.at(3).toString());
+		}
+		for (const QVariantList &b : rows.bridges) {
+			if (b.at(1).toString() != uuid) continue;
+			QDomElement bridge = strip.appendChild(document.createElement(QStringLiteral("terminal_strip_bridge"))).toElement();
+			bridge.setAttribute(QStringLiteral("uuid"), b.at(0).toString());
+			if (!b.at(3).isNull()) bridge.setAttribute(QStringLiteral("color"), b.at(3).toString());
+			QDomElement reals = bridge.appendChild(document.createElement(QStringLiteral("real_terminals"))).toElement();
+			for (const QVariantList &bt : rows.bridge_terminals) {
+				if (bt.at(0).toString() != b.at(0).toString()) continue;
+				QDomElement real = reals.appendChild(document.createElement(QStringLiteral("real_terminal"))).toElement();
+				if (!bt.at(2).isNull()) real.setAttribute(QStringLiteral("uuid"), bt.at(2).toString());
+			}
+		}
+	}
+	return root;
+}
+
+	//The rows of @p block, if rebuilding them gives @p block back exactly
+bool stripRows(const QDomElement &block, StripRows *rows)
+{
+	if (block.attributes().count() || hasWhitespaceText(block)) return false;
+	QSet<QString> strip_uuids, bridge_uuids;
+	int ord = 0;
+	for (QDomElement strip = block.firstChildElement() ; !strip.isNull() ; strip = strip.nextSiblingElement()) {
+		const QDomElement data = strip.firstChildElement(QStringLiteral("terminal_strip_data"));
+		const QString uuid = data.attribute(QStringLiteral("uuid"));
+		if (uuid.isEmpty() || strip_uuids.contains(uuid)) return false;
+		strip_uuids.insert(uuid);
+		QHash<QString, QString> info;
+		for (QDomElement i = data.firstChildElement(QStringLiteral("informations")).firstChildElement() ;
+			 !i.isNull() ; i = i.nextSiblingElement())
+			info.insert(i.attribute(QStringLiteral("name")), i.text());
+		QVariantList row{uuid, ord++};
+		for (const QString &n : StripData) row << (info.contains(n) ? QVariant(info.value(n)) : QVariant());
+		rows->strips << row;
+		int pos = 0;
+		for (QDomElement phy = strip.firstChildElement(QStringLiteral("layout")).firstChildElement() ;
+			 !phy.isNull() ; phy = phy.nextSiblingElement(), ++pos) {
+			int level = 0;
+			for (QDomElement real = phy.firstChildElement() ; !real.isNull() ; real = real.nextSiblingElement())
+				rows->terminals << QVariantList{uuid, pos, level++, real.hasAttribute(QStringLiteral("element_uuid"))
+												? QVariant(real.attribute(QStringLiteral("element_uuid"))) : QVariant()};
+		}
+		int b_ord = 0;
+		for (QDomElement br = strip.firstChildElement(QStringLiteral("terminal_strip_bridge")) ;
+			 !br.isNull() ; br = br.nextSiblingElement(QStringLiteral("terminal_strip_bridge"))) {
+			const QString buuid = br.attribute(QStringLiteral("uuid"));
+			if (buuid.isEmpty() || bridge_uuids.contains(buuid)) return false;
+			bridge_uuids.insert(buuid);
+			rows->bridges << QVariantList{buuid, uuid, b_ord++, br.hasAttribute(QStringLiteral("color"))
+											? QVariant(br.attribute(QStringLiteral("color"))) : QVariant()};
+			int k = 0;
+			for (QDomElement real = br.firstChildElement(QStringLiteral("real_terminals")).firstChildElement() ;
+				 !real.isNull() ; real = real.nextSiblingElement())
+				rows->bridge_terminals << QVariantList{buuid, k++, real.hasAttribute(QStringLiteral("uuid"))
+														? QVariant(real.attribute(QStringLiteral("uuid"))) : QVariant()};
+		}
+	}
+	QDomDocument scratch;
+	return sameTree(block, stripsXml(scratch, *rows));
+}
+
 QList<QDomElement> children(const QDomElement &parent, const QString &tag)
 {
 	QList<QDomElement> list;
@@ -432,6 +568,22 @@ QByteArray QetContainerDb::extract(QDomElement project, QString *error)
 		}
 	}
 
+		//Terminal strips, when their rows rebuild them exactly
+	const QDomElement strips = project.firstChildElement(QStringLiteral("terminal_strips"));
+	StripRows strip_rows;
+	if (!strips.isNull() && stripRows(strips, &strip_rows)) {
+		Statement st(db.m_db, QStringLiteral("INSERT INTO terminal_strip VALUES (?,?,?,?,?,?,?)"));
+		Statement tt(db.m_db, QStringLiteral("INSERT INTO strip_terminal VALUES (?,?,?,?)"));
+		Statement bt(db.m_db, QStringLiteral("INSERT INTO strip_bridge VALUES (?,?,?,?)"));
+		Statement btt(db.m_db, QStringLiteral("INSERT INTO strip_bridge_terminal VALUES (?,?,?)"));
+		for (const QVariantList &r : strip_rows.strips) ok = ok && st.run(r);
+		for (const QVariantList &r : strip_rows.terminals) ok = ok && tt.run(r);
+		for (const QVariantList &r : strip_rows.bridges) ok = ok && bt.run(r);
+		for (const QVariantList &r : strip_rows.bridge_terminals) ok = ok && btt.run(r);
+		ok = ok && meta.run({QStringLiteral("terminal_strips"), QStringLiteral("1")});
+		leaveMarker(strips);
+	}
+
 	if (!ok || !db.exec(QStringLiteral("COMMIT"))) {
 		setError(error, QStringLiteral("cannot fill the project database: %1").arg(db.error()));
 		return {};
@@ -474,7 +626,8 @@ bool QetContainerDb::restore(QDomElement project, const QByteArray &database, QS
 	db.exec(QStringLiteral("PRAGMA trusted_schema = OFF"));
 	db.exec(QStringLiteral("PRAGMA query_only = ON"));
 	for (const char *table : {"meta", "project_property", "folio", "folio_property",
-							  "element", "element_info", "link", "conductor"}) {
+							  "element", "element_info", "link", "conductor", "terminal_strip",
+							  "strip_terminal", "strip_bridge", "strip_bridge_terminal"}) {
 		Statement kind(db.m_db, QStringLiteral("SELECT type FROM sqlite_master WHERE name = ?"));
 		kind.bind({QString::fromLatin1(table)});
 		if (!kind.next() || kind.value(0).toString() != QLatin1String("table")) {
@@ -509,6 +662,26 @@ bool QetContainerDb::restore(QDomElement project, const QByteArray &database, QS
 		restoreWhitespace(props, meta.value(QStringLiteral("props_attrs")));
 		if (!replaceMarker(project, props)) {
 			setError(error, QStringLiteral("the project's properties have no place"));
+			return false;
+		}
+	}
+
+	if (meta.contains(QStringLiteral("terminal_strips"))) {
+		StripRows rows;
+		auto read = [&db](const QString &sql, int columns, QList<QVariantList> *out) {
+			Statement s(db.m_db, sql);
+			while (s.next()) {
+				QVariantList r;
+				for (int i = 0 ; i < columns ; ++i) r << s.value(i);
+				*out << r;
+			}
+		};
+		read(QStringLiteral("SELECT * FROM terminal_strip ORDER BY ord"), 7, &rows.strips);
+		read(QStringLiteral("SELECT * FROM strip_terminal ORDER BY strip_uuid, pos, level"), 4, &rows.terminals);
+		read(QStringLiteral("SELECT * FROM strip_bridge ORDER BY ord"), 4, &rows.bridges);
+		read(QStringLiteral("SELECT * FROM strip_bridge_terminal ORDER BY bridge_uuid, ord"), 3, &rows.bridge_terminals);
+		if (!replaceMarker(project, stripsXml(document, rows))) {
+			setError(error, QStringLiteral("the terminal strips have no place"));
 			return false;
 		}
 	}
