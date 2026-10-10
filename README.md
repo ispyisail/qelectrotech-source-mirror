@@ -3,7 +3,7 @@
 A prototype, outside QElectroTech, of the zipped project file from Joshua's
 roadmap note (`refonte_du_code_de_qelectrotech` on the wiki). It converts a
 `.qet` into a `.qetz` and back, so "every older project still opens" can be
-measured instead of promised. Discussion: <DISCUSSION>
+measured instead of promised. Discussion: https://github.com/qelectrotech/qelectrotech-source-mirror/discussions/1440
 
 It needs only Python 3, nothing else to install. It runs on your own computer and sends
 nothing anywhere. It never changes the file you give it.
