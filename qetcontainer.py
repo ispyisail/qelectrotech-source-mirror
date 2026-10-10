@@ -56,6 +56,7 @@ CONDUCTOR_DATA = ["uuid", "element1", "terminal1", "element2", "terminal2",
                   "num", "formula", "function", "tension_protocol",
                   "conductor_color", "conductor_section", "cable", "bus",
                   "freezeLabel"]
+STRIP_DATA = ["installation", "location", "name", "comment", "description"]
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -84,8 +85,23 @@ CREATE TABLE link (
 CREATE TABLE conductor (
     key TEXT PRIMARY KEY,
     folio_id TEXT NOT NULL REFERENCES folio ON DELETE CASCADE, %s);
+CREATE TABLE terminal_strip (
+    uuid TEXT PRIMARY KEY, ord INTEGER NOT NULL UNIQUE,
+    %s);
+CREATE TABLE strip_terminal (
+    strip_uuid TEXT NOT NULL REFERENCES terminal_strip ON DELETE CASCADE,
+    pos INTEGER NOT NULL, level INTEGER NOT NULL, element_uuid TEXT,
+    PRIMARY KEY (strip_uuid, pos, level));
+CREATE TABLE strip_bridge (
+    uuid TEXT PRIMARY KEY,
+    strip_uuid TEXT NOT NULL REFERENCES terminal_strip ON DELETE CASCADE,
+    ord INTEGER NOT NULL, color TEXT);
+CREATE TABLE strip_bridge_terminal (
+    bridge_uuid TEXT NOT NULL REFERENCES strip_bridge ON DELETE CASCADE,
+    ord INTEGER NOT NULL, element_uuid TEXT,
+    PRIMARY KEY (bridge_uuid, ord));
 """ % tuple(", ".join(f'"{c}" TEXT' for c in cols)
-            for cols in (FOLIO_DATA, ELEMENT_DATA, CONDUCTOR_DATA))
+            for cols in (FOLIO_DATA, ELEMENT_DATA, CONDUCTOR_DATA, STRIP_DATA))
 
 
 # --- helpers -----------------------------------------------------------------
@@ -205,7 +221,8 @@ def split(qet_path, out_path):
     stats = dict.fromkeys(
         ["folios", "elements", "element_infos", "links", "conductors",
          "images", "symbols", "folio_without_uuid", "element_key_repair",
-         "conductor_key_repair", "other_toplevel"], 0)
+         "conductor_key_repair", "other_toplevel", "terminal_strips",
+         "strip_terminals"], 0)
 
     with tempfile.TemporaryDirectory() as tmp:
         dbfile = Path(tmp) / "project.sqlite"
@@ -251,6 +268,8 @@ def split(qet_path, out_path):
             elif child.tag == "collection":
                 _split_collection(child, files, stats)
                 files["elements/collection.xml"] = _xml(child)
+            elif child.tag == "terminal_strips" and _split_strips(child, db, stats):
+                pass                     # rebuilt from the database
             elif child.tag == "diagram":
                 pos += 1
                 fid = child.get("uuid")
@@ -372,6 +391,92 @@ def _split_diagram(d, fid, pos, fname, db, files, stats, ekeys, ckeys):
         stats["images"] += 1
 
 
+def _split_strips(node, db, stats):
+    """Terminal strips into the database. Only when rebuilding them from
+    the rows gives back exactly this XML: anything else (an attribute or
+    child QElectroTech does not write, a strip without a uuid) leaves the
+    whole block as a verbatim file, counted as other_toplevel."""
+    strips, terms, bridges, bterms = [], [], [], []
+    try:
+        if node.attrib or node.text and node.text.strip():
+            return False
+        for i, st in enumerate(node):
+            data = st.find("terminal_strip_data")
+            suuid = data.get("uuid")
+            if not suuid:
+                return False
+            info = {x.get("name"): x.text or "" for x in data.iter("information")}
+            strips.append((suuid, i, *[info.get(c) for c in STRIP_DATA]))
+            for p, phy in enumerate(st.find("layout")):
+                for lv, rt in enumerate(phy):
+                    terms.append((suuid, p, lv, rt.get("element_uuid")))
+            for b, br in enumerate(st.findall("terminal_strip_bridge")):
+                buuid = br.get("uuid")
+                if not buuid:
+                    return False
+                bridges.append((buuid, suuid, b, br.get("color")))
+                bterms += [(buuid, k, rt.get("uuid"))
+                           for k, rt in enumerate(br.find("real_terminals"))]
+    except (AttributeError, TypeError):
+        return False
+    rebuilt = _strips_xml(strips, terms, bridges, bterms)
+    if first_difference(node, rebuilt) is not None:
+        return False
+    if (len({r[0] for r in strips}) != len(strips)
+            or len({r[0] for r in bridges}) != len(bridges)):
+        return False
+    db.executemany("INSERT INTO terminal_strip VALUES (%s)" % ",".join("?" * (2 + len(STRIP_DATA))), strips)
+    db.executemany("INSERT INTO strip_terminal VALUES (?,?,?,?)", terms)
+    db.executemany("INSERT INTO strip_bridge VALUES (?,?,?,?)", bridges)
+    db.executemany("INSERT INTO strip_bridge_terminal VALUES (?,?,?)", bterms)
+    stats["terminal_strips"] += len(strips)
+    stats["strip_terminals"] += len(terms)
+    return True
+
+
+def _strips_xml(strips, terms, bridges, bterms):
+    """<terminal_strips> as QElectroTech writes it (TerminalStrip::toXml)."""
+    root = ET.Element("terminal_strips")
+    for suuid, _ord, *info in sorted(strips, key=lambda r: r[1]):
+        st = ET.SubElement(root, "terminal_strip")
+        data = ET.SubElement(st, "terminal_strip_data", {"uuid": suuid})
+        infos = ET.SubElement(data, "informations")
+        for name, value in zip(STRIP_DATA, info):
+            if value is not None:
+                ET.SubElement(infos, "information", {"name": name}).text = value
+        layout = ET.SubElement(st, "layout")
+        phys = {}
+        for s_uuid, p, lv, euuid in sorted(terms, key=lambda r: (r[1], r[2])):
+            if s_uuid != suuid:
+                continue
+            if p not in phys:
+                phys[p] = ET.SubElement(layout, "physical_terminal")
+            rt = ET.SubElement(phys[p], "real_terminal")
+            if euuid is not None:
+                rt.set("element_uuid", euuid)
+        for buuid, s_uuid, _b, color in sorted(bridges, key=lambda r: r[2]):
+            if s_uuid != suuid:
+                continue
+            br = ET.SubElement(st, "terminal_strip_bridge", {"uuid": buuid})
+            if color is not None:
+                br.set("color", color)
+            rts = ET.SubElement(br, "real_terminals")
+            for b_uuid, _k, euuid in sorted(bterms, key=lambda r: r[1]):
+                if b_uuid == buuid:
+                    rt = ET.SubElement(rts, "real_terminal")
+                    if euuid is not None:
+                        rt.set("uuid", euuid)
+    return root
+
+
+def _join_strips(db):
+    q = lambda sql: db.execute(sql).fetchall()
+    return _strips_xml(q("SELECT * FROM terminal_strip"),
+                       q("SELECT * FROM strip_terminal"),
+                       q("SELECT * FROM strip_bridge"),
+                       q("SELECT * FROM strip_bridge_terminal"))
+
+
 def _split_collection(node, files, stats, path=("elements",)):
     for c in node:
         if c.tag == "category":
@@ -419,6 +524,8 @@ def join(in_path, out_path=None):
                     if e.get(FILE):
                         e.append(parse(files[e.attrib.pop(FILE)]))
                 root.append(col)
+            elif tag == "terminal_strips" and not entry.get("file"):
+                root.append(_join_strips(db))
             elif tag == "diagram":
                 root.append(_join_diagram(entry.get("id"), db, files))
             else:

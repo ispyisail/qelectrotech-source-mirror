@@ -26,7 +26,8 @@ the project.
 ```
 manifest.xml          format version, oldest reader allowed
 project.sqlite        engineering data: folio and project information,
-                      symbol information, coil–contact links, wires
+                      symbol information, coil–contact links, wires,
+                      terminal strips (terminals, levels, bridges)
 folios/<id>.xml       one per folio: where things are drawn
 elements/             the project's symbols, one .elmt each
 titleblocks/          one .titleblock each
@@ -46,6 +47,7 @@ does it only say where ink goes → folio file; can QElectroTech work it out
 | 9 bugtracker attachments (QElectroTech 0.4 – 0.100) | 9 / 9 | 8 same, 1 that QElectroTech itself does not resave the same way twice |
 | 4 GitHub issue attachments (up to 148 folios) | 4 / 4 | 4 / 4 |
 | a test file with symbols sharing a uuid (#1408) | 1 / 1 | 1 / 1 |
+| a test file with two terminal strips and bridges | 1 / 1 | 1 / 1 |
 
 41.3 MB of `.qet` became 9.3 MB of `.qetz`.
 
