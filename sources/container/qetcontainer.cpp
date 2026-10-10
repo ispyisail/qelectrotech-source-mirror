@@ -34,7 +34,10 @@ void setError(QString *error, const QString &text)
 	if (error) *error = text;
 }
 
-	//An element on its own, as a .qet is written (QET::writeXmlFile())
+	//An element on its own, written without adding indentation: the
+	//whitespace text already in the document (QETProject keeps the symbol
+	//definitions as they were read, spacing included) must come back as it
+	//was, or the next save writes it differently. Parts are one line.
 QByteArray serialize(const QDomNode &node)
 {
 	QDomDocument document;
@@ -42,7 +45,7 @@ QByteArray serialize(const QDomNode &node)
 							 QStringLiteral("xml"),
 							 QStringLiteral("version=\"1.0\" encoding=\"UTF-8\"")));
 	document.appendChild(document.importNode(node, true));
-	return document.toString(4).toUtf8();
+	return document.toString(-1).toUtf8();
 }
 
 	//A file name from a name chosen by the user: no folders, nothing a zip
@@ -134,6 +137,30 @@ bool QetContainer::parse(const QByteArray &xml, QDomDocument *document, QString 
 	}
 	return true;
 #endif
+}
+
+/**
+	@brief QetContainer::isZip
+	A .qetz is recognised by what it holds, not its name: a crash backup
+	of a .qetz project is plain XML, and a renamed file is still a zip.
+*/
+bool QetContainer::isZip(const QByteArray &content)
+{
+	return content.startsWith("PK\x03\x04");
+}
+
+/**
+	@brief QetContainer::readDocument
+	The project document held in @p content: unzipped and joined for a
+	.qetz, parsed for a .qet.
+*/
+bool QetContainer::readDocument(const QByteArray &content, QDomDocument *document, QString *error)
+{
+	if (!isZip(content))
+		return parse(content, document, error);
+	QList<QetZip::Entry> entries;
+	return QetZip::fromBytes(content, &entries, error)
+			&& join(entries, document, error);
 }
 
 /**

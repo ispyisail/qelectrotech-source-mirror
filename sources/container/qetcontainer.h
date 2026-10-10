@@ -54,6 +54,10 @@ namespace QetContainer
 
 		/// Parse @p xml as a .qet is read (QETProject::openFile)
 	bool parse(const QByteArray &xml, QDomDocument *document, QString *error = nullptr);
+		/// true if @p content is a zip, so a .qetz rather than a .qet
+	bool isZip(const QByteArray &content);
+		/// The project document in @p content, a .qet or a .qetz
+	bool readDocument(const QByteArray &content, QDomDocument *document, QString *error = nullptr);
 }
 
 #endif // QETCONTAINER_H

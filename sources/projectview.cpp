@@ -339,11 +339,16 @@ int ProjectView::tryClosingDiagrams()
 */
 QString ProjectView::askUserForFilePath(bool assign) {
 	// ask the user for a filepath in order to save the project
+	const QString qet_filter = tr("Project QElectroTech (*.qet)", "filetypes allowed when saving a project file");
+	const QString qetz_filter = tr("Zipped project QElectroTech (*.qetz)", "filetypes allowed when saving a project file");
+	QString selected_filter = QETProject::isContainerPath(m_project->filePath()) ? qetz_filter : qet_filter;
 	QString filepath = QFileDialog::getSaveFileName(
 		this,
 		tr("Save as", "dialog title"),
-		m_project -> currentDir() + "/" + tr("untitled") + ".qet",
-		tr("Project QElectroTech (*.qet)", "filetypes allowed when saving a project file")
+		m_project -> currentDir() + "/" + tr("untitled")
+				+ (selected_filter == qetz_filter ? ".qetz" : ".qet"),
+		qet_filter + ";;" + qetz_filter,
+		&selected_filter
 	);
 
 	// if no filepath is provided, return an empty string
@@ -359,9 +364,15 @@ QString ProjectView::askUserForFilePath(bool assign) {
 	// extension at all whenever the portal didn't (bugtracker #270).
 	// Stripping any existing suffix first and re-appending it once is
 	// correct either way.
-	if (filepath.endsWith(".qet", Qt::CaseInsensitive))
+	// A .qetz is kept as typed, or chosen through its filter.
+	const bool zipped = filepath.endsWith(".qetz", Qt::CaseInsensitive)
+			|| (selected_filter == qetz_filter
+				&& !filepath.endsWith(".qet", Qt::CaseInsensitive));
+	if (filepath.endsWith(".qetz", Qt::CaseInsensitive))
+		filepath.chop(5);
+	else if (filepath.endsWith(".qet", Qt::CaseInsensitive))
 		filepath.chop(4);
-	filepath += ".qet";
+	filepath += zipped ? ".qetz" : ".qet";
 
 	if (assign) {
 		// assign the provided filepath to the currently edited project

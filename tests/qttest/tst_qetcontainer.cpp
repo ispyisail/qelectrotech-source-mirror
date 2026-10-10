@@ -4,13 +4,16 @@
 #include <QDir>
 #include <QFile>
 
+#include <functional>
+
 #include "container/qetcontainer.h"
 
 // A project document split into the parts of a .qetz, zipped, unzipped and
 // joined back is the document it was: every example, and every .qet in the
-// folder QET_CONTAINER_CORPUS names, if set. Whitespace-only text between
-// elements is indentation and is not compared; elsewhere it is (a
-// title-block value of " ", #973).
+// folder QET_CONTAINER_CORPUS names, if set -- exactly, whitespace text
+// included: QETProject writes the symbol definitions back as it read them,
+// spacing and all, so a part that came back re-indented would change the
+// next save.
 class tst_qetcontainer : public QObject
 {
 	Q_OBJECT
@@ -18,16 +21,9 @@ class tst_qetcontainer : public QObject
 	static QList<QDomNode> children(const QDomNode &node)
 	{
 		QList<QDomNode> all;
-		bool has_element = false;
-		for (QDomNode c = node.firstChild() ; !c.isNull() ; c = c.nextSibling()) {
+		for (QDomNode c = node.firstChild() ; !c.isNull() ; c = c.nextSibling())
 			all << c;
-			has_element |= c.isElement();
-		}
-		if (!has_element) return all;
-		QList<QDomNode> kept;
-		for (const QDomNode &c : all)
-			if (!(c.isText() && c.nodeValue().trimmed().isEmpty())) kept << c;
-		return kept;
+		return all;
 	}
 
 	// empty when equal, else where they differ
@@ -104,6 +100,36 @@ private slots:
 		QVERIFY2(QetContainer::join(unzipped, &back, &error), qPrintable(error));
 		const QString d = difference(original.documentElement(), back.documentElement(), QString());
 		QVERIFY2(d.isEmpty(), qPrintable(d));
+	}
+
+	// Splitting and joining adds no whitespace text. QETProject keeps the
+	// symbol definitions as it read them and writes them back as they
+	// are, so indentation a part gained would change the next save
+	// (forum attachments 1328, 1978, 2057, 3003, 3004 did, with indented
+	// parts). Here: a document without any whitespace-only text, as
+	// QETProject::toXml() builds one, must come back without any.
+	void noWhitespaceAdded()
+	{
+		QDomDocument original;
+		QVERIFY(original.setContent(read(QStringLiteral(QET_EXAMPLES_DIR "/industrial.qet"))));
+		auto whitespace_nodes = [](const QDomDocument &d) {
+			int n = 0;
+			std::function<void(const QDomNode &)> walk = [&](const QDomNode &node) {
+				for (QDomNode c = node.firstChild() ; !c.isNull() ; c = c.nextSibling()) {
+					if (c.isText() && c.nodeValue().trimmed().isEmpty()) ++n;
+					walk(c);
+				}
+			};
+			walk(d);
+			return n;
+		};
+		QCOMPARE(whitespace_nodes(original), 0);
+		QString error;
+		const QList<QetZip::Entry> entries = QetContainer::split(original, QString(), &error);
+		QVERIFY2(!entries.isEmpty(), qPrintable(error));
+		QDomDocument back;
+		QVERIFY2(QetContainer::join(entries, &back, &error), qPrintable(error));
+		QCOMPARE(whitespace_nodes(back), 0);
 	}
 
 	// The folio pictures leave the folios, once each
