@@ -556,8 +556,9 @@ void QETDiagramEditor::setUpActions()
 	m_draw_grid->setCheckable(true);
 	m_draw_grid->setChecked(settings.value("diagrameditor/grid_display_startup", true).toBool());
 	connect(m_draw_grid, &QAction::triggered, [this](bool checked) {
+			//The folio's own setting: folios() builds nothing
 		foreach (ProjectView *prjv, this->openedProjects())
-			foreach (Diagram *d, prjv->project()->diagrams()) {
+			foreach (Diagram *d, prjv->project()->folios()) {
 				d->setDisplayGrid(checked);
 				d->update();
 			}
@@ -597,8 +598,9 @@ void QETDiagramEditor::setUpActions()
 	m_draw_guides->setCheckable(true);
 	m_draw_guides->setChecked(settings.value("diagrameditor/guides_display_startup", false).toBool());
 	connect(m_draw_guides, &QAction::triggered, [this](bool checked) {
+			//The folio's own setting: folios() builds nothing
 		foreach (ProjectView *prjv, this->openedProjects())
-			foreach (Diagram *d, prjv->project()->diagrams()) {
+			foreach (Diagram *d, prjv->project()->folios()) {
 				d->setDisplayGuides(checked);
 			}
 	});
@@ -646,8 +648,10 @@ void QETDiagramEditor::setUpActions()
 		action->setData(int(kind.first));
 		connect(action, &QAction::triggered, this, [kind](bool checked) {
 			ShownKinds::setShown(kind.first, checked);
+				//Items built later are shown or hidden as they are made
+				//(ShownKinds::tag())
 			for (QETProject *project : QETApp::registeredProjects())
-				for (Diagram *diagram : project->diagrams())
+				for (Diagram *diagram : project->builtFolios())
 					ShownKinds::apply(diagram, kind.first);
 			emit QETApp::instance()->shownKindsChanged();
 		});
