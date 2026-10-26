@@ -593,7 +593,12 @@ void Conductor::paint(QPainter *painter, const QStyleOptionGraphicsItem *options
 {
 	Q_UNUSED(qw);
 	painter -> save();
-	painter -> setRenderHint(QPainter::Antialiasing, false);
+	// Antialiasing stays off on screen to keep thin lines crisp. A printer
+	// is rasterised at the driver's resolution (96 dpi on Windows), where
+	// an unsmoothed 0.5 pen lands on 1 or 2 pixels and prints uneven.
+	painter -> setRenderHint(
+		QPainter::Antialiasing,
+		painter -> device() -> devType() == QInternal::Printer);
 
 		// Set the color of conductor
 	QColor final_conductor_color(m_properties.color);
