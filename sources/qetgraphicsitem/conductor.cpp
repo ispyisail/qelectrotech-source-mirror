@@ -37,6 +37,7 @@
 #include "../wirehops.h"
 
 #include <QMultiHash>
+#include <QPrinter>
 #include <QtDebug>
 
 namespace {
@@ -584,7 +585,7 @@ QPointF Conductor::extendTerminal(const QPointF &terminal, Qet::Orientation term
 }
 
 /**
-	Dessine le conducteur sans antialiasing.
+	Dessine le conducteur sans antialiasing (sauf sur une imprimante).
 	@param painter Le QPainter a utiliser pour dessiner le conducteur
 	@param options Les options de style pour le conducteur
 	@param qw Le QWidget sur lequel on dessine
@@ -595,10 +596,12 @@ void Conductor::paint(QPainter *painter, const QStyleOptionGraphicsItem *options
 	painter -> save();
 	// Antialiasing stays off on screen to keep thin lines crisp. A printer
 	// is rasterised at the driver's resolution (96 dpi on Windows), where
-	// an unsmoothed 0.5 pen lands on 1 or 2 pixels and prints uneven.
+	// an unsmoothed 0.5 pen lands on 1 or 2 pixels and prints uneven. A PDF
+	// file is vector, so it keeps the old hint and its output is unchanged.
+	const auto *printer = dynamic_cast<QPrinter *>(painter -> device());
 	painter -> setRenderHint(
 		QPainter::Antialiasing,
-		painter -> device() -> devType() == QInternal::Printer);
+		printer && printer -> outputFormat() == QPrinter::NativeFormat);
 
 		// Set the color of conductor
 	QColor final_conductor_color(m_properties.color);
