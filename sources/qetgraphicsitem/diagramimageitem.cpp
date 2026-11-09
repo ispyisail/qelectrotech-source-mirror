@@ -15,6 +15,7 @@
 	You should have received a copy of the GNU General Public License
 	along with QElectroTech.  If not, see <http://www.gnu.org/licenses/>.
 */
+#include "../drawinglayers/drawinglayers.h"
 #include "diagramimageitem.h"
 #include <palettegraphicsview.h>
 #include <darkimagerendering.h>
@@ -1884,6 +1885,7 @@ bool DiagramImageItem::fromXml(const QDomElement &e, Picture picture)
 		return (false);
 	}
 	setAdaptToDarkTheme(e.attribute("adapt_to_dark_theme", "false") == "true");
+	DrawingLayers::readAttribute(this, e);
 
 	const QUuid uuid(e.attribute(QStringLiteral("uuid")));
 	if (!uuid.isNull() && uuid != m_uuid) setUuid(uuid);
@@ -2035,6 +2037,7 @@ QDomElement DiagramImageItem::toXml(QDomDocument &document) const
 	QDomElement result = document.createElement("image");
 	result.setAttribute("uuid", m_uuid.toString());
 	if (m_adapt_to_dark_theme) result.setAttribute("adapt_to_dark_theme", "true");
+	DrawingLayers::writeAttribute(this, result);
 	//write some attribute
 	result.setAttribute("x", QString::number(pos().x()));
 	result.setAttribute("y", QString::number(pos().y()));

@@ -2975,6 +2975,7 @@ QDomDocument QETProject::toXml(QHash<int, QByteArray> *kept_folios, QStringList 
 	writeChainedReportsXml(project_root);
 	writeConductorPlantCountersXml(project_root);
 	writeDeviceTypesXml(project_root);
+	writeDrawingLayersXml(project_root);
 	writeOriginXml(project_root);
 
 	// Properties for news diagrams
@@ -4206,6 +4207,7 @@ void QETProject::readProjectXml(QDomDocument &xml_project)
 	readChainedReportsXml(xml_project);
 	readConductorPlantCountersXml(xml_project);
 	readDeviceTypesXml(xml_project);
+	readDrawingLayersXml(xml_project);
 	readOriginXml(xml_project);
 
 		//What this QET does not know of the project, kept for every format
@@ -5734,6 +5736,34 @@ void QETProject::writeDeviceTypesXml(QDomElement &xml_element)
 	xml_element.appendChild(types);
 }
 
+/**
+	@brief QETProject::setDrawingLayers
+	Keep @p layers, and show the items of the folios built as they say.
+	A folio built later applies them when it is read.
+*/
+void QETProject::setDrawingLayers(const DrawingLayers::Set &layers)
+{
+	const bool changed = layers != m_drawing_layers;
+	m_drawing_layers = layers;
+	for (Diagram *folio : folios())
+		DrawingLayers::applyTo(folio, m_drawing_layers);
+	if (changed) storeSettings();
+}
+
+void QETProject::readDrawingLayersXml(QDomDocument &xml_project)
+{
+	m_drawing_layers = DrawingLayers::Set::fromXml(
+				xml_project.documentElement().firstChildElement(QStringLiteral("layers")));
+}
+
+void QETProject::writeDrawingLayersXml(QDomElement &xml_element)
+{
+	if (m_drawing_layers.isEmpty())
+		return;
+	QDomDocument document = xml_element.ownerDocument();
+	xml_element.appendChild(m_drawing_layers.toXml(document));
+}
+
 bool QETProject::chainedReports() const
 {
 	return m_chained_reports;
@@ -5867,6 +5897,7 @@ void QETProject::storeSettings()
 	writeChainedReportsXml(root);
 	writeConductorPlantCountersXml(root);
 	writeDeviceTypesXml(root);
+	writeDrawingLayersXml(root);
 	writeOriginXml(root);
 	QDomElement new_diagrams = document.createElement(QStringLiteral("newdiagrams"));
 	writeDefaultPropertiesXml(new_diagrams);

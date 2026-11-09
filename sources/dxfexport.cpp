@@ -15,6 +15,7 @@
 	You should have received a copy of the GNU General Public License
 	along with QElectroTech.  If not, see <http://www.gnu.org/licenses/>.
 */
+#include "drawinglayers/drawinglayers.h"
 #include "dxfexport.h"
 #include "shownkinds.h"
 
@@ -373,7 +374,7 @@ void DxfExport::write(Diagram *diagram, int width, int height,
 	}
 	for (QGraphicsItem *qgi : std::as_const(stacked_items)) {
 			//Left out like on screen and in print (View > Show, #301)
-		if (ShownKinds::isHidden(qgi)) {
+		if (ShownKinds::isHidden(qgi) || DrawingLayers::isHidden(qgi)) {
 			continue;
 		}
 		if (Element *elmt = qgraphicsitem_cast<Element *>(qgi)) {

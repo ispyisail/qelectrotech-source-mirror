@@ -18,6 +18,7 @@
 #ifndef QET_PROJECT_H
 #define QET_PROJECT_H
 
+#include "drawinglayers/drawinglayers.h"
 #include "devicetype/devicetype.h"
 #include <functional>
 #include "ElementsCollection/elementslocation.h"
@@ -369,6 +370,9 @@ class QETProject : public QObject
 		QList<DeviceType> deviceTypes() const {return m_device_types.values();}
 		DeviceType deviceType(const QString &name) const {return m_device_types.value(name);}
 		void setDeviceType(const DeviceType &type);
+			/// The named layers of the project's free drawing
+		const DrawingLayers::Set &drawingLayers() const {return m_drawing_layers;}
+		void setDrawingLayers(const DrawingLayers::Set &layers);
 		void removeDeviceType(const QString &name);
 		bool chainedReports() const;
 		void setChainedReports(bool enable);
@@ -544,6 +548,7 @@ class QETProject : public QObject
 		void readChainedReportsXml(QDomDocument &xml_project);
 		void readConductorPlantCountersXml(QDomDocument &xml_project);
 		void readDeviceTypesXml(QDomDocument &xml_project);
+		void readDrawingLayersXml(QDomDocument &xml_project);
 		void readTerminalLabelSplitXml(QDomDocument &xml_project);
 		void readWiringRulesXml(QDomDocument &xml_project);
 
@@ -567,6 +572,7 @@ class QETProject : public QObject
 		void writeChainedReportsXml(QDomElement &);
 		void writeConductorPlantCountersXml(QDomElement &);
 		void writeDeviceTypesXml(QDomElement &);
+		void writeDrawingLayersXml(QDomElement &);
 		void writeTerminalLabelSplitXml(QDomElement &);
 		void writeWiringRulesXml(QDomElement &);
 		void addDiagram(Diagram *diagram, int pos = -1);
@@ -707,6 +713,7 @@ class QETProject : public QObject
 			/// Conductor numbering scheme -> plant -> the values its plant
 			/// counters last gave there (conductorPlantCounter())
 		QHash<QString, QHash<QString, QStringList>> m_conductor_plant_counters;
+		DrawingLayers::Set m_drawing_layers;
 			/// The project's device types, by name (deviceTypes())
 		QMap<QString, DeviceType> m_device_types;
 		bool m_pending_auto_link = false;

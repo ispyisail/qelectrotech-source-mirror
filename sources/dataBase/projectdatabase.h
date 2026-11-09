@@ -557,6 +557,10 @@ class projectDataBase : public QObject
 		void conductorPropertiesChanged();
 			//Queue the sender()'s drawing-item row for rewriting.
 		void drawingItemChanged();
+	public:
+			/// The row of a shape, free text or picture is to be rewritten
+		void drawingItemTouched(QObject *object);
+	private slots:
 		void drawingItemDestroyed(QObject *object);
 			//Queue the sender()'s link rows for rewriting.
 		void linksChanged();

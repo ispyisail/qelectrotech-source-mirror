@@ -15,6 +15,7 @@
 	You should have received a copy of the GNU General Public License
 	along with QElectroTech.  If not, see <http://www.gnu.org/licenses/>.
 */
+#include "../drawinglayers/drawinglayers.h"
 #include "qetshapeitem.h"
 #include <shownkinds.h>
 
@@ -3047,6 +3048,7 @@ void QetShapeItem::handlerMouseReleaseEvent(int handlerIndex)
 bool QetShapeItem::fromXml(const QDomElement &e)
 {
 	if (e.tagName() != "shape") return (false);
+	DrawingLayers::readAttribute(this, e);
 
 		//Absent in files written before shapes carried a uuid: keep the
 		//one this item already has, Diagram::fromXml() settles it.
@@ -3187,6 +3189,7 @@ QDomElement QetShapeItem::toXml(QDomDocument &document) const
 	result.appendChild(QETXML::brushToXml(document, m_brush));
 	result.setAttribute("is_movable", bool(is_movable_));
 	result.setAttribute("closed", bool(m_closed));
+	DrawingLayers::writeAttribute(this, result);
 
 	if (m_shapeType != Polygon && m_shapeType != Path)
 	{

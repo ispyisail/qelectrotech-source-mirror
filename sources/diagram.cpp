@@ -15,6 +15,7 @@
 	You should have received a copy of the GNU General Public License
 	along with QElectroTech.  If not, see <http://www.gnu.org/licenses/>.
 */
+#include "drawinglayers/drawinglayers.h"
 #include "diagram.h"
 #include "bridge/bridgecopy.h"
 #include "bridge/bridgemanager.h"
@@ -2917,6 +2918,9 @@ bool Diagram::fromXml(QDomElement &document,
 	}
 
 	adjustSceneRect();
+		//What is on a layer switched off is not shown
+	if (project()) DrawingLayers::applyTo(this, project()->drawingLayers());
+
 	return(true);
 }
 

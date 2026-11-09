@@ -4031,6 +4031,12 @@ void projectDataBase::drawingItemChanged()
 	}
 }
 
+void projectDataBase::drawingItemTouched(QObject *object)
+{
+	if (object && isDrawingItem(object))
+		m_dirty_drawing_items.insert(object);
+}
+
 /**
 	@brief projectDataBase::drawingItemDestroyed
 	An item deleted while still on its folio (e.g. by the scene's own

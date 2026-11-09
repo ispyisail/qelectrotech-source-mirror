@@ -155,6 +155,10 @@ set(QET_SRC_FILES
   ${QET_DIR}/sources/diagramevent/macrolabels.h
   ${QET_DIR}/sources/ui/macrolabelsdialog.cpp
   ${QET_DIR}/sources/ui/macrolabelsdialog.h
+  ${QET_DIR}/sources/drawinglayers/drawinglayers.cpp
+  ${QET_DIR}/sources/drawinglayers/drawinglayers.h
+  ${QET_DIR}/sources/undocommand/drawinglayerscommand.cpp
+  ${QET_DIR}/sources/undocommand/drawinglayerscommand.h
   ${QET_DIR}/sources/import/edz/lzma/7zAlloc.c
   ${QET_DIR}/sources/import/edz/lzma/7zArcIn.c
   ${QET_DIR}/sources/import/edz/lzma/7zBuf.c

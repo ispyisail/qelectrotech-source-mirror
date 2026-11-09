@@ -15,6 +15,7 @@
 	You should have received a copy of the GNU General Public License
 	along with QElectroTech.  If not, see <http://www.gnu.org/licenses/>.
 */
+#include "../drawinglayers/drawinglayers.h"
 #include "independenttextitem.h"
 #include <shownkinds.h>
 
@@ -85,6 +86,7 @@ IndependentTextItem::~IndependentTextItem()
 	@param e L'element XML representant le champ de texte
 */
 void IndependentTextItem::fromXml(const QDomElement &e) {
+	DrawingLayers::readAttribute(this, e);
 	const QUuid uuid(e.attribute(QStringLiteral("uuid")));
 	if (!uuid.isNull() && uuid != m_uuid) setUuid(uuid);
 		//"nan" and "inf" parse as numbers; a non-finite position or
@@ -121,6 +123,7 @@ QDomElement IndependentTextItem::toXml(QDomDocument &document) const
 	result.setAttribute("text", toHtml());
 	result.setAttribute("rotation", QString::number(QET::correctAngle(rotation())));
 	result.setAttribute("font", QETUtils::fontToString(font()));
+	DrawingLayers::writeAttribute(this, result);
 		//Only when set, so a text with the automatic width is saved as before
 	if (m_text_width > 0)
 		result.setAttribute("text_width", QString::number(m_text_width));
