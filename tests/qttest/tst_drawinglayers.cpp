@@ -24,11 +24,18 @@
 #include "qetproject.h"
 #include "qetresult.h"
 #include "shownkinds.h"
+#include "print/projectprintwindow.h"
+#include "ui/layersdialog.h"
 #include "undocommand/drawinglayerscommand.h"
 
 #include <QFile>
 #include <QHash>
 #include <QTemporaryDir>
+#include <QComboBox>
+#include <QListWidget>
+#include <QPrinter>
+#include <QTableWidget>
+#include <QUndoStack>
 #include <QtTest>
 
 /**
@@ -181,6 +188,90 @@ class tst_drawinglayers : public QObject
 		const QByteArray saved = f.readAll();
 		QVERIFY(!saved.contains("<layers"));
 		QVERIFY(!saved.contains("layer="));
+	}
+
+	void dialogManagesLayers()
+	{
+		QETProject project;
+		Diagram *folio = project.addNewDiagram();
+		auto *shape = line(folio, QString());
+		LayersDialog dialog(&project);
+		auto *table = dialog.findChild<QTableWidget *>(QStringLiteral("layersTable"));
+		QVERIFY(table);
+		QVERIFY(dialog.addLayer(QStringLiteral("Quote")));
+		QVERIFY(!dialog.addLayer(QStringLiteral("Quote")));
+		QCOMPARE(table->rowCount(), 1);
+		QCOMPARE(table->item(0, 1)->text(), QStringLiteral("Quote"));
+		shape->setSelected(true);
+		QCOMPARE(dialog.putSelectionOnLayer(QStringLiteral("Quote"), folio), 1);
+		QCOMPARE(DrawingLayers::layerOf(shape), QStringLiteral("Quote"));
+			//Unticking in the table hides what is on it
+		table->item(0, 0)->setCheckState(Qt::Unchecked);
+		QVERIFY(!project.drawingLayers().isVisible(QStringLiteral("Quote")));
+		QVERIFY(!shape->isVisible());
+		table->item(0, 0)->setCheckState(Qt::Checked);
+		QVERIFY(shape->isVisible());
+			//A rename follows on the items and in the groups
+		QVERIFY(dialog.addGroup(QStringLiteral("Customer")));
+		dialog.setGroupLayers(QStringLiteral("Customer"), {QStringLiteral("Quote")});
+		QVERIFY(dialog.renameLayer(QStringLiteral("Quote"), QStringLiteral("Offer")));
+		QCOMPARE(DrawingLayers::layerOf(shape), QStringLiteral("Offer"));
+		QCOMPARE(project.drawingLayers().groups.first().layers, QStringList({QStringLiteral("Offer")}));
+			//Undo through the stack comes back to the dialog
+		project.undoStack()->undo();
+		QCOMPARE(DrawingLayers::layerOf(shape), QStringLiteral("Quote"));
+		QCOMPARE(table->item(0, 1)->text(), QStringLiteral("Quote"));
+		project.undoStack()->redo();
+			//Removing a layer keeps what was on it, on no layer
+		dialog.removeLayer(QStringLiteral("Offer"));
+		QVERIFY(project.drawingLayers().layers.isEmpty());
+		QCOMPARE(DrawingLayers::layerOf(shape), QString());
+		QVERIFY(shape->isVisible());
+		QVERIFY(project.drawingLayers().groups.first().layers.isEmpty());
+	}
+
+	void showingAGroup()
+	{
+		QETProject project;
+		Diagram *folio = project.addNewDiagram();
+		project.setDrawingLayers(twoLayers());
+		auto *quote = line(folio, QStringLiteral("Quote"));
+		auto *mounting = line(folio, QStringLiteral("Mounting"));
+		LayersDialog dialog(&project);
+		dialog.showGroup(QStringLiteral("For the customer"));
+		QVERIFY(quote->isVisible());
+		QVERIFY(!mounting->isVisible());
+		project.undoStack()->undo();
+		QVERIFY(mounting->isVisible());
+	}
+
+	void aGroupIsChosenForOnePrint()
+	{
+		QETProject project;
+		Diagram *folio = project.addNewDiagram();
+		project.setDrawingLayers(twoLayers());
+		auto *quote = line(folio, QStringLiteral("Quote"));
+		auto *mounting = line(folio, QStringLiteral("Mounting"));
+		{
+			ProjectPrintWindow window(&project, new QPrinter());
+			auto *choice = window.findChild<QComboBox *>(QStringLiteral("m_layer_group_cb"));
+			QVERIFY(choice);
+			QCOMPARE(choice->count(), 2);
+			choice->setCurrentIndex(1);
+			QVERIFY(quote->isVisible());
+			QVERIFY(!mounting->isVisible());
+				//For this print only: the project is as it was
+			QVERIFY(project.drawingLayers().isVisible(QStringLiteral("Mounting")));
+		}
+		QVERIFY(mounting->isVisible());
+	}
+
+	void withoutGroupsThePrintWindowHasNoChoice()
+	{
+		QETProject project;
+		project.addNewDiagram();
+		ProjectPrintWindow window(&project, new QPrinter());
+		QVERIFY(!window.findChild<QComboBox *>(QStringLiteral("m_layer_group_cb")));
 	}
 
 	void undoGivesBackLayersAndItems()

@@ -15,6 +15,7 @@
 	You should have received a copy of the GNU General Public License
 	along with QElectroTech.  If not, see <http://www.gnu.org/licenses/>.
 */
+#include "../drawinglayers/drawinglayers.h"
 #include "projectprintwindow.h"
 #include "pdfpagesetupdialog.h"
 #include "printdrawing.h"
@@ -41,6 +42,7 @@
 #include <QPageSetupDialog>
 #include <QPainter>
 #include <QPrintDialog>
+#include <QComboBox>
 #include <QPrintPreviewWidget>
 #include <QFile>
 #include <QRegularExpression>
@@ -145,6 +147,7 @@ ProjectPrintWindow::ProjectPrintWindow(QETProject *project, QPrinter *printer, Q
 		connect(pdf_button, &QPushButton::clicked, this, &ProjectPrintWindow::exportToPDF);
 	}
 	ui->m_component_info_cb->setVisible(m_printer->outputFormat() == QPrinter::PdfFormat);
+	setUpLayerGroups();
 
 	auto exp = ExportProperties::defaultPrintProperties();
 	ui->m_draw_border_cb->setChecked(exp.draw_border);
@@ -171,9 +174,38 @@ ProjectPrintWindow::ProjectPrintWindow(QETProject *project, QPrinter *printer, Q
  */
 ProjectPrintWindow::~ProjectPrintWindow()
 {
+		//The folios show their layers as the project says again
+	if (m_layers_changed && m_project)
+		for (Diagram *folio : m_project->folios())
+			DrawingLayers::applyTo(folio, m_project->drawingLayers());
 	delete ui;
 	delete m_printer;
 	Diagram::background_color = m_backup_diagram_background_color;
+}
+
+/**
+ * @brief ProjectPrintWindow::setUpLayerGroups
+ * The layer groups of the project to choose from, for this print only;
+ * shown when the project has some.
+ */
+void ProjectPrintWindow::setUpLayerGroups()
+{
+	const auto &groups = m_project->drawingLayers().groups;
+	if (groups.isEmpty()) return;
+	m_layer_group_cb = new QComboBox(this);
+	m_layer_group_cb->setObjectName(QStringLiteral("m_layer_group_cb"));
+	m_layer_group_cb->addItem(tr("Layers as shown"));
+	for (const auto &group : groups) m_layer_group_cb->addItem(group.name);
+	ui->verticalLayout->addWidget(m_layer_group_cb);
+	connect(m_layer_group_cb, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
+		m_project->loadFolios();
+		DrawingLayers::Set set = m_project->drawingLayers();
+		if (index > 0) set = set.showing(set.groups.at(index - 1));
+		for (Diagram *folio : m_project->folios())
+			DrawingLayers::applyTo(folio, set);
+		m_layers_changed = true;
+		m_preview->updatePreview();
+	});
 }
 
 /**

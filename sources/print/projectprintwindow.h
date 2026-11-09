@@ -31,6 +31,7 @@ class ProjectPrintWindow;
 
 class QETProject;
 class QPrintPreviewWidget;
+class QComboBox;
 class QPrinter;
 class ExportProperties;
 class Diagram;
@@ -89,6 +90,7 @@ class ProjectPrintWindow : public QMainWindow
 		int verticalPagesCount(Diagram *diagram, const ExportProperties &option, bool full_page) const;
 		ExportProperties exportProperties() const;
 		void setUpDiagramList();
+		void setUpLayerGroups();
 		QString settingsSectionName(const QPrinter *printer);
 		void loadPageSetupForCurrentPrinter();
 		void savePrintProperties();
@@ -104,6 +106,8 @@ class ProjectPrintWindow : public QMainWindow
 		QETProject *m_project = nullptr;
 		QPrinter *m_printer = nullptr;
 		QPrintPreviewWidget *m_preview=nullptr;
+		QComboBox *m_layer_group_cb = nullptr;
+		bool m_layers_changed = false;
 		QColor m_backup_diagram_background_color;
 		QHash<Diagram *, QCheckBox *> m_diagram_list_hash;
 		QList<PdfLinks::ComponentInfo> m_componentInfoList;

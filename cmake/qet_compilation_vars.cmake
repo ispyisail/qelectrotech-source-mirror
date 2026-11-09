@@ -202,6 +202,8 @@ set(QET_SRC_FILES
   ${QET_DIR}/sources/duplicatelabels.cpp
   ${QET_DIR}/sources/ui/duplicatelabelsdialog.h
   ${QET_DIR}/sources/ui/duplicatelabelsdialog.cpp
+  ${QET_DIR}/sources/ui/layersdialog.cpp
+  ${QET_DIR}/sources/ui/layersdialog.h
   ${QET_DIR}/sources/ui/devicetypecheckdialog.h
   ${QET_DIR}/sources/ui/devicetypeeditor.h
   ${QET_DIR}/sources/ui/devicetypeeditor.cpp
