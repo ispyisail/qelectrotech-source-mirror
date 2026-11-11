@@ -21,6 +21,7 @@
 #include "qetapptest.h"
 #include "qetgraphicsitem/independenttextitem.h"
 #include "qetgraphicsitem/qetshapeitem.h"
+#include "qetgraphicsitem/structureboxitem.h"
 #include "qetproject.h"
 #include "qetresult.h"
 #include "shownkinds.h"
@@ -97,6 +98,10 @@ class tst_drawinglayers : public QObject
 		Diagram *folio = project.addNewDiagram();
 		QVERIFY(DrawingLayers::canBeOnLayer(line(folio, QString())));
 		QVERIFY(DrawingLayers::canBeOnLayer(text(folio, QString())));
+			//A structure box is a shape too, of a type of its own
+		auto *box = new StructureBoxItem(QPointF(0, 0), QPointF(100, 100));
+		folio->addItem(box);
+		QVERIFY(DrawingLayers::canBeOnLayer(box));
 		QGraphicsRectItem other;
 		QVERIFY(!DrawingLayers::canBeOnLayer(&other));
 	}

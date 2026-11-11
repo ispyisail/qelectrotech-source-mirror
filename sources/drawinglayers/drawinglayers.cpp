@@ -21,6 +21,7 @@
 #include "../qetgraphicsitem/diagramimageitem.h"
 #include "../qetgraphicsitem/independenttextitem.h"
 #include "../qetgraphicsitem/qetshapeitem.h"
+#include "../qetgraphicsitem/structureboxitem.h"
 #include "../shownkinds.h"
 
 #include <QGraphicsItem>
@@ -134,7 +135,9 @@ namespace DrawingLayers
 
 	bool canBeOnLayer(const QGraphicsItem *item)
 	{
+			//A structure box is a shape with a type of its own
 		return qgraphicsitem_cast<const QetShapeItem *>(item)
+				|| qgraphicsitem_cast<const StructureBoxItem *>(item)
 				|| qgraphicsitem_cast<const IndependentTextItem *>(item)
 				|| qgraphicsitem_cast<const DiagramImageItem *>(item);
 	}
