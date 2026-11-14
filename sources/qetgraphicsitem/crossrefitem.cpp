@@ -943,8 +943,10 @@ void CrossRefItem::setUpCrossBoundingRect(QPainter &painter)
 	//Minor adjustement for better visual
 	default_bounding.adjust(0, 0, 4, 0);
 	m_shape_path.addRect(default_bounding);
-	prepareGeometryChange();
-	m_bounding_rect = default_bounding;
+	if (default_bounding != m_bounding_rect) {
+		prepareGeometryChange();
+		m_bounding_rect = default_bounding;
+	}
 }
 
 /**
@@ -1115,8 +1117,10 @@ void CrossRefItem::drawAsContacts(QPainter &painter)
 	}
 
 	bounding_rect.adjust(-list_margin_left, -4, list_margin_right, 4);
-	prepareGeometryChange();
-	m_bounding_rect = bounding_rect;
+	if (bounding_rect != m_bounding_rect) {
+		prepareGeometryChange();
+		m_bounding_rect = bounding_rect;
+	}
 	m_shape_path.addRect(bounding_rect);
 }
 
@@ -1726,8 +1730,11 @@ void CrossRefItem::AddExtraInfo(QPainter &painter, const QString& type)
 		text_bounding.adjust(-1,0,1,0); //adjust only for better visual
 
 		m_shape_path.addRect(text_bounding);
-		prepareGeometryChange();
-		m_bounding_rect = m_bounding_rect.united(text_bounding);
+		const QRectF united = m_bounding_rect.united(text_bounding);
+		if (united != m_bounding_rect) {
+			prepareGeometryChange();
+			m_bounding_rect = united;
+		}
 		if (type == "comment") painter.drawRoundedRect(text_bounding,
 							       2,
 							       2);
