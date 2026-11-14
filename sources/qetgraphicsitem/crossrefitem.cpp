@@ -943,10 +943,8 @@ void CrossRefItem::setUpCrossBoundingRect(QPainter &painter)
 	//Minor adjustement for better visual
 	default_bounding.adjust(0, 0, 4, 0);
 	m_shape_path.addRect(default_bounding);
-	if (default_bounding != m_bounding_rect) {
-		prepareGeometryChange();
-		m_bounding_rect = default_bounding;
-	}
+	prepareGeometryChange();
+	m_bounding_rect = default_bounding;
 }
 
 /**
@@ -956,8 +954,11 @@ void CrossRefItem::setUpCrossBoundingRect(QPainter &painter)
 */
 void CrossRefItem::drawAsCross(QPainter &painter)
 {
-	//calculate the size of the cross
-	setUpCrossBoundingRect(painter);
+	//calculate the size of the cross. Only updateLabel() does it:
+	//changing the geometry from paint() schedules another paint, and the
+	//folio then repaints forever (#1903)
+	if (m_update_map)
+		setUpCrossBoundingRect(painter);
 	m_drawed_contacts = 0;
 	if (m_update_map) m_hovered_contacts_map.clear();
 
@@ -1117,11 +1118,13 @@ void CrossRefItem::drawAsContacts(QPainter &painter)
 	}
 
 	bounding_rect.adjust(-list_margin_left, -4, list_margin_right, 4);
-	if (bounding_rect != m_bounding_rect) {
+	//Only updateLabel() sets the geometry, never paint() (#1903)
+	if (m_update_map)
+	{
 		prepareGeometryChange();
 		m_bounding_rect = bounding_rect;
+		m_shape_path.addRect(bounding_rect);
 	}
-	m_shape_path.addRect(bounding_rect);
 }
 
 /**
@@ -1730,11 +1733,8 @@ void CrossRefItem::AddExtraInfo(QPainter &painter, const QString& type)
 		text_bounding.adjust(-1,0,1,0); //adjust only for better visual
 
 		m_shape_path.addRect(text_bounding);
-		const QRectF united = m_bounding_rect.united(text_bounding);
-		if (united != m_bounding_rect) {
-			prepareGeometryChange();
-			m_bounding_rect = united;
-		}
+		prepareGeometryChange();
+		m_bounding_rect = m_bounding_rect.united(text_bounding);
 		if (type == "comment") painter.drawRoundedRect(text_bounding,
 							       2,
 							       2);
