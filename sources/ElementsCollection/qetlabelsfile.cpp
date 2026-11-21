@@ -436,9 +436,10 @@ bool QetLabelsFile::convertForeignRoot(const QDomDocument &document,
 				: converted.importNode(top_category, true).toElement();
 		top_category.setAttribute(QStringLiteral("name"), top);
 
-		for (QDomElement child = root.firstChildElement(QStringLiteral("category")) ;
+		const QString category = QStringLiteral("category");
+		for (QDomElement child = root.firstChildElement(category) ;
 			 !child.isNull() ;
-			 child = child.nextSiblingElement(QStringLiteral("category"))) {
+			 child = child.nextSiblingElement(category)) {
 			const QString name = child.attribute(QStringLiteral("name"));
 			if (name == top
 				|| !existing.contains(top + QLatin1Char('/') + name)
