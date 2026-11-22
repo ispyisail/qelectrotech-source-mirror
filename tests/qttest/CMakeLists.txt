@@ -581,6 +581,8 @@ qet_add_app_test(tst_materiallistedit tst_materiallistedit.cpp)
 qet_add_app_test(tst_parttypes tst_parttypes.cpp)
 # The project's lists: on screen, per place, to CSV and PDF.
 qet_add_app_test(tst_projectreports tst_projectreports.cpp)
+
+# Renaming a plant or a location in the whole project, in one undo step.
 qet_add_app_test(tst_placerename tst_placerename.cpp)
 # A read-only project builds its lazy folios whole: shown, exported, written out.
 qet_add_app_test(tst_readonlyfolios tst_readonlyfolios.cpp)
